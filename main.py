@@ -29,7 +29,7 @@ SMART_FILE = os.path.join(DATA_DIR, "Smart Collections.csv")
 
 gdown.download(id="1_dHsJNwBvsqKza2jWuy4Ml1nBTx54eIy", output=SMART_FILE, quiet=False)
 TOP_K = 5
-MAX_ROWS = int(os.getenv("MAX_ROWS", "2000000"))
+MAX_ROWS = int(os.getenv("MAX_ROWS", "50000"))
 
 # Lyzr API configuration
 LYZR_API_URL = os.getenv("LYZR_AGENT_URL")
