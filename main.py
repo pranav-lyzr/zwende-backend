@@ -24,12 +24,12 @@ DATA_DIR = os.getenv("DATA_DIR", "./data")
 ORDER_FILE = os.path.join(DATA_DIR, "OrderExport230425.xlsx")
 PRODUCT_FILE = os.path.join(DATA_DIR, "ProductExport230425.xlsx")
 SMART_COLLECTION_FILE_ID = os.getenv("SMART_COLLECTION_FILE_ID")  # from .env
-SMART_FILE = os.path.join(DATA_DIR, "Smart Collections.csv")
 # SMART_FILE = os.path.join(DATA_DIR, "Smart Collections.csv")
+SMART_FILE = os.path.join(DATA_DIR, "Smart Collections.csv")
 
-# gdown.download(id="1_dHsJNwBvsqKza2jWuy4Ml1nBTx54eIy", output=SMART_FILE, quiet=False)
+gdown.download(id="1_dHsJNwBvsqKza2jWuy4Ml1nBTx54eIy", output=SMART_FILE, quiet=False)
 TOP_K = 5
-MAX_ROWS = int(os.getenv("MAX_ROWS", "20000"))
+MAX_ROWS = int(os.getenv("MAX_ROWS", "2000000"))
 
 # Lyzr API configuration
 LYZR_API_URL = os.getenv("LYZR_AGENT_URL")
