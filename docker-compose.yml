@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  zwende-agent:
+    build: .
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./data:/app/data
