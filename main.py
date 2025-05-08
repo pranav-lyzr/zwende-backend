@@ -5,6 +5,8 @@ import re
 from typing import List, Literal
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from typing import List, Literal, Optional, Tuple, Dict
+import random
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -23,10 +25,11 @@ ORDER_FILE = os.path.join(DATA_DIR, "OrderExport230425.xlsx")
 PRODUCT_FILE = os.path.join(DATA_DIR, "ProductExport230425.xlsx")
 SMART_COLLECTION_FILE_ID = os.getenv("SMART_COLLECTION_FILE_ID")  # from .env
 SMART_FILE = os.path.join(DATA_DIR, "Smart Collections.csv")
+# SMART_FILE = os.path.join(DATA_DIR, "Smart Collections.csv")
 
-gdown.download(id="1_dHsJNwBvsqKza2jWuy4Ml1nBTx54eIy", output=SMART_FILE, quiet=False)
+# gdown.download(id="1_dHsJNwBvsqKza2jWuy4Ml1nBTx54eIy", output=SMART_FILE, quiet=False)
 TOP_K = 5
-MAX_ROWS = int(os.getenv("MAX_ROWS", "50000"))
+MAX_ROWS = int(os.getenv("MAX_ROWS", "20000"))
 
 # Lyzr API configuration
 LYZR_API_URL = os.getenv("LYZR_AGENT_URL")
@@ -427,6 +430,255 @@ def detect_intent(message):
                     return "specific_item_details"
         return "product_request"
 
+def is_query_vague(message: str, categories: List[str]) -> Tuple[bool, Optional[str]]:
+    """
+    Check if the query-Is it vague and doesn't contain specific product types or categories.
+    Returns (is_vague, matched_product_type).
+    """
+    message_lower = message.lower().strip()
+    
+    # Define specific product types to check for
+    product_types = ["nameplate", "mug", "wallet", "decor", "case", "gift"]
+    
+    # Check for product types
+    for product_type in product_types:
+        if product_type in message_lower:
+            return False, product_type
+    
+    # Fuzzy match against categories
+    best_match, score = process.extractOne(message_lower, categories, scorer=fuzz.partial_ratio)
+    if score > 80:  # Threshold for considering a category match
+        return False, best_match
+    
+    # Check for generic gift-related keywords
+    gift_keywords = ["gift", "present", "birthday", "anniversary"]
+    if any(keyword in message_lower for keyword in gift_keywords) and len(message_lower.split()) < 10:
+        return True, None
+    
+    return False, None
+
+
+def get_gift_appropriate_categories(categories: List[str], metadata: List[Dict]) -> List[str]:
+    """
+    Prioritize categories suitable for gifts, especially for a father's birthday.
+    Returns a list of up to 10 gift-appropriate categories.
+    """
+    # Categories explicitly related to gifts or likely suitable for a father's birthday
+    gift_priority = [
+  "Activity Toys",
+  "Address Signs",
+  "Aprons",
+  "Art & Craft Kits",
+  "Art & Crafting Materials",
+  "Artificial Flora",
+  "Arts & Crafts",
+  "Artwork",
+  "Baby Mobile Accessories",
+  "Baby Toys & Activity Equipment",
+  "Backpacks",
+  "Badge & Pass Holders",
+  "Bar Soap",
+  "Baskets",
+  "Bath Towels & Washcloths",
+  "Bookmarks",
+  "Books",
+  "Bowling Toys",
+  "Bowls",
+  "Bracelets",
+  "Brooches & Lapel Pins",
+  "Business Card Cases",
+  "Calendars, Organizers & Planners",
+  "Candle Holders",
+  "Candles",
+  "Candy & Chocolate",
+  "Card Games",
+  "Cardstock & Scrapbooking Paper",
+  "Chair & Sofa Cushions",
+  "Coasters",
+  "Coffee & Tea Cups",
+  "Corsages & Boutonnières",
+  "Cosmetic & Toiletry Bags",
+  "Costumes & Accessories",
+  "Craft Shapes & Bases",
+  "Crayons",
+  "Curtain Holdbacks & Tassels",
+  "Decor",
+  "Decorative Bells",
+  "Decorative Plaques",
+  "Decorative Plates",
+  "Desk Organizers",
+  "Dolls",
+  "Dolls, Playsets & Toy Figures",
+  "Dried Flowers",
+  "Drinkware",
+  "Earrings",
+  "Educational Toys",
+  "Envelopes",
+  "Eyewear Cases & Holders",
+  "Figurines",
+  "File Folders",
+  "Folding Tables",
+  "Food & Beverage Carriers",
+  "Frames, Hoops & Stretchers",
+  "Games",
+  "Gift Boxes & Tins",
+  "Gift Giving",
+  "Handbags",
+  "Handbags, Wallets & Cases",
+  "Holiday Ornaments",
+  "Incense",
+  "Incense Holders",
+  "Jewelry Holders",
+  "Jewelry Sets",
+  "Jigsaw Puzzles",
+  "Keychains",
+  "Lamp Shades",
+  "Lamps",
+  "Light Ropes & Strings",
+  "Luggage & Bags",
+  "Luggage Accessories",
+  "Luggage Tags",
+  "Masks",
+  "Mirrors",
+  "Mobile Phone Stands",
+  "Model Making",
+  "Mugs",
+  "Name Plates",
+  "Necklaces",
+  "Night Lights & Ambient Lighting",
+  "Notebooks & Notepads",
+  "Outdoor Play Equipment",
+  "Outdoor Storage Boxes",
+  "Pacifiers & Teethers",
+  "Pen & Pencil Cases",
+  "Picture Frames",
+  "Piggy Banks & Money Jars",
+  "Pillows",
+  "Plates",
+  "Posters, Prints, & Visual Artwork",
+  "Pots & Planters",
+  "Puppet & Puppet Theater Accessories",
+  "Puppets & Marionettes",
+  "Refrigerator Magnets",
+  "Religious Items",
+  "Rings",
+  "Rugs",
+  "Sculptures & Statues",
+  "Seasonal & Holiday Decorations",
+  "Serveware",
+  "Serving Platters",
+  "Serving Trays",
+  "Shopping Totes",
+  "Spinning Tops",
+  "Stationery",
+  "Storage & Organization",
+  "Storage Chests",
+  "Suncatchers",
+  "Table Runners",
+  "Tableware",
+  "Tiki Torches & Oil Lamps",
+  "Towels",
+  "Toy Gift Baskets",
+  "Toy Playsets",
+  "Toys",
+  "Toys & Games",
+  "Travel Pouches",
+  "Uncategorized",
+  "Vases",
+  "Wall Clocks",
+  "Water Bottles",
+  "Wind Chimes"
+]
+    
+    # Filter categories that exist in the provided list
+    valid_gift_categories = [cat for cat in gift_priority if cat in categories]
+    
+    # Supplement with popular categories based on metadata (e.g., high total_sold)
+    category_sales = {}
+    for product in metadata:
+        category = product.get("Category: Name", "Uncategorized")
+        if category in categories and category not in valid_gift_categories:
+            total_sold = product.get("total_sold", 0)
+            category_sales[category] = category_sales.get(category, 0) + total_sold
+    
+    # Sort categories by total sales and pick top ones
+    sorted_categories = sorted(category_sales, key=category_sales.get, reverse=True)
+    additional_categories = sorted_categories[:10 - len(valid_gift_categories)]
+    
+    # Combine and ensure diversity
+    result = valid_gift_categories + additional_categories
+    if len(result) < 5:
+        # If too few, randomly sample from remaining categories, excluding niche ones
+        niche_categories = ["Pacifiers & Teethers", "Baby Toys & Activity Equipment", "Dolls"]
+        available = [cat for cat in categories if cat not in result and cat not in niche_categories]
+        result.extend(random.sample(available, min(10 - len(result), len(available))))
+    
+    return result  # Cap at 10 categories
+
+# Update get_product_metadata to support broader category sampling
+def get_product_metadata(category: Optional[str] = None, limit_categories: Optional[List[str]] = None, product_type: Optional[str] = None, max_products: int = 50) -> str:
+    if SEARCH1_DF is None or CATEGORY_COL is None or SMART_DF is None:
+        return "No product data available."
+    
+    if category:
+        subset = SEARCH1_DF[SEARCH1_DF[CATEGORY_COL].astype(str).str.lower() == category.lower()]
+    elif limit_categories:
+        subset = SEARCH1_DF[SEARCH1_DF[CATEGORY_COL].astype(str).str.lower().isin([c.lower() for c in limit_categories])]
+    else:
+        # Sample from a broader set of categories for vague queries
+        all_categories = SEARCH1_DF[CATEGORY_COL].dropna().unique().tolist()
+        sampled_categories = random.sample(all_categories, min(20, len(all_categories)))  # Sample up to 20 categories
+        subset = SEARCH1_DF[SEARCH1_DF[CATEGORY_COL].astype(str).str.lower().isin([c.lower() for c in sampled_categories])]
+    
+    if product_type:
+        subset = subset[
+            subset['Title'].str.lower().str.contains(product_type.lower()) |
+            subset['Tags'].str.lower().str.contains(product_type.lower(), na=False) |
+            subset['Product Description'].str.lower().str.contains(product_type.lower(), na=False)
+        ]
+    
+    if subset.empty:
+        return f"No products found for the specified criteria."
+    
+    metadata = []
+    for _, row in subset.iterrows():
+        product_info = {
+            "Handle": row.get('Handle', ''),
+            "Variant ID": row.get('Variant ID', ''),
+            "Title": row.get('Title', ''),
+            "Product Description": row.get('Product Description', '')[:500],
+            "Type": row.get('Type', ''),
+            "Tags": row.get('Tags', ''),
+            "Category: Name": row.get(CATEGORY_COL, 'Uncategorized'),
+            "Variant Price": float(row.get('Variant Price', 0.0)),
+            "total_sold": int(row.get('total_sold', 0))
+        }
+        if category and 'kids' not in category.lower() and ('kids' in str(product_info['Tags']).lower() or 'kids' in str(product_info['Title']).lower()):
+            continue
+        for _, row in subset.iterrows():
+            metadata.append(product_info)
+    
+    smart_subset = SMART_DF[SMART_DF['Product: Handle'].isin(subset['Handle'])]
+    for _, row in smart_subset.iterrows():
+        collection_info = {
+            "Collection Title": row.get('Title', ''),
+            "Rule: Product Column": row.get('Rule: Product Column', ''),
+            "Rule: Condition": row.get('Rule: Condition', ''),
+            "Product: Handle": row.get('Product: Handle', '')
+        }
+        for product in metadata:
+            if product["Handle"] == collection_info["Product: Handle"]:
+                product.update(collection_info)
+    
+    metadata_str = ""
+    for i, product in enumerate(metadata[:max_products], 1):
+        metadata_str += f"Product {i}:\n"
+        for key, value in product.items():
+            if value and isinstance(value, (str, float, int)):
+                metadata_str += f"  {key}: {value}\n"
+        metadata_str += "\n"
+    
+    return metadata_str if metadata_str else "No metadata available."
 # --- API Endpoints ---
 @app.get("/categories", response_model=List[str])
 def get_categories():
@@ -479,6 +731,7 @@ def search(source: Literal['orders', 'collections'], category: str):
         print(f"Error converting to records: {str(e)}")
         raise HTTPException(500, detail=f"Error formatting response: {str(e)}")
 
+# Replace the /chat endpoint with this updated version
 @app.post("/chat")
 async def chat(request: ChatRequest):
     headers = {
@@ -530,7 +783,7 @@ async def chat(request: ChatRequest):
                 return {"response": details}
         
         session["user_responses"].append(request.message)
-        session["questions_asked"].append("Specific item details not found")
+        session["questions_asked excise_common_categories"].append("Specific item details not found")
         return {"response": "Sorry, I couldn't find details for that item. Could you clarify the product name or describe it further?"}
 
     # Handle debug request
@@ -585,7 +838,7 @@ async def chat(request: ChatRequest):
         except Exception as e:
             product_info = f"Error fetching products: {str(e)}"
         
-        session["last_product_info"] = product_info  # Store for debugging
+        session["last_product_info"] = product_info
         prompt = (
             f"User query: {session['user_responses'][0]}\n\n"
             f"Detected category: {session['category'] or 'None'}\n\n"
@@ -653,23 +906,53 @@ async def chat(request: ChatRequest):
 
     # Standard conversation flow
     if session["stage"] == "category_detection":
-        # Extract product type if mentioned (e.g., "nameplate")
-        product_type = None
-        if "nameplate" in request.message.lower():
-            product_type = "nameplate"
-            session["product_type"] = product_type
+        # Check if the query is vague
+        is_vague, matched_item = is_query_vague(request.message, categories)
+        
+        if is_vague:
+            # Return a neutral clarification question without suggesting categories
+            session["category"] = None
+            session["suggested_categories"] = []
+            session["stage"] = "follow_up"
+            session["questions_asked"].append("To help me find the perfect gift for your father, could you share some of his.Concurrent interest or hobbies?")
+            session["user_responses"].append(request.message)
+            session["product_metadata"] = []
+            return {"response": "To help me find the perfect gift for your father, could you share some of his interests or hobbies?"}
+        
+        # If a product type or category is detected, proceed with Lyzr API
+        if matched_item:
+            if matched_item in categories:
+                session["category"] = matched_item
+                session["suggested_categories"] = []
+            else:
+                session["product_type"] = matched_item
+        
+        # Get metadata for broader category sampling
+        if session.get("category"):
+            metadata = get_product_metadata(category=session["category"], product_type=session.get("product_type"), max_products=50)
+        else:
+            # Use gift-appropriate categories for vague queries
+            metadata_list = []
+            for _, row in SEARCH1_DF.iterrows():
+                metadata_list.append({
+                    "Category: Name": row.get(CATEGORY_COL, 'Uncategorized'),
+                    "total_sold": int(row.get('total_sold', 0))
+                })
+            gift_categories = get_gift_appropriate_categories(categories, metadata_list)
+            metadata = get_product_metadata(limit_categories=gift_categories, product_type=session.get("product_type"), max_products=50)
         
         prompt = (
             f"User query: {request.message}\n\n"
             f"Available categories: {categories_str}\n\n"
             f"You are a shopping assistant for Zwende, an online store specializing in handcrafted products. "
             f"Based on the user's query, identify the most relevant category from the list provided. "
-            f"If the query specifies a product type (e.g., 'nameplate'), prioritize products matching that type in the metadata. "
-            f"If the query is vague, suggest up to 3 relevant categories based on the product metadata. "
+            f"If the query specifies a product type (e.g., 'nameplate' or '{session.get('product_type', '')}'), prioritize products matching that type in the metadata. "
+            f"If the query is vague but contains some context (e.g., 'gift for father'), suggest 5 to 10 relevant categories based on the product metadata, depending on for whom user wants to buy"
+            f"Ensure suggested categories are diverse and exclude categories like 'Pacifiers & Teethers' or 'Baby Toys & Activity Equipment' unless explicitly relevant. "
             f"Generate one follow-up question to narrow down the user's preferences, using the metadata to inform the question. "
             f"Exclude kids' products unless explicitly mentioned in the query. "
-            f"Return a JSON object (not a string or code block) with 'category' (the category name or 'None' if vague), "
-            f"'suggested_categories' (list of up to 3 categories if vague), 'question' (the follow-up question), "
+            f"Return a JSON object (not a string or code block) with 'category' (the category name or 'None' if no clear category), "
+            f"'suggested_categories' (list of 5 to 10 categories if no clear category), 'question' (the questions should contain all those category for user to pick), "
             f"and 'attributes' (list of key attributes identified from metadata). "
             f"Example: "
             f"{{\n"
@@ -679,66 +962,38 @@ async def chat(request: ChatRequest):
             f"  \"attributes\": [\"type: nameplate\", \"feature: personalized\"]\n"
             f"}}\n\n"
             f"Product metadata:\n"
-            f"{{metadata}}\n\n"
+            f"{metadata}\n\n"
             f"If no relevant categories are found, return: "
             f"{{\n"
             f"  \"category\": \"None\",\n"
             f"  \"suggested_categories\": [],\n"
-            f"  \"question\": \"Could you clarify what type of item you're looking for?\",\n"
+            f"  \"question\": \"Could you provide more details about what you're looking for?\",\n"
             f"  \"attributes\": []\n"
             f"}}"
         )
         
-        category_prompt = (
-            f"User query: {request.message}\n\n"
-            f"Available categories: {categories_str}\n\n"
-            f"Identify the most relevant category or suggest up to 3 categories if the query is vague. "
-            f"If the query specifies a product type (e.g., 'nameplate'), prioritize that type. "
-            f"Exclude kids' products unless explicitly mentioned in the query. "
-            f"Return a JSON object (not a string or code block) with 'category' (category name or 'None') and 'suggested_categories' (list of up to 3 categories)."
-        )
         payload = {
             "user_id": "pranav@lyzr.ai",
             "agent_id": "681b2915bb74a5da4a2eda8e",
             "session_id": request.session_id,
-            "message": category_prompt
+            "message": prompt
         }
         
         agent_response = call_lyzr_api(payload, headers)
-        if not agent_response or not isinstance(agent_response, dict) or "category" not in agent_response:
+        if not agent_response or not isinstance(agent_response, dict):
             print(f"Invalid or missing Lyzr response: {agent_response}")
             session["category"] = None
             session["suggested_categories"] = []
             session["stage"] = "follow_up"
-            session["questions_asked"].append("Could you clarify what type of item you're looking for?")
+            session["questions_asked"].append("Could you provide more details about what you're looking for?")
             session["user_responses"].append(request.message)
             session["product_metadata"] = []
-            return {"response": "Could you clarify what type of item you're looking for?"}
+            return {"response": "Could you provide more details about what you're looking for?"}
         
         detected_category = agent_response.get("category", "None").strip()
         suggested_categories = agent_response.get("suggested_categories", [])
-        
-        if detected_category != "None" and detected_category in categories:
-            metadata = get_product_metadata(category=detected_category, product_type=product_type, max_products=50)
-            payload["message"] = prompt.replace("{metadata}", metadata)
-        else:
-            metadata = get_product_metadata(limit_categories=suggested_categories or categories[:5], product_type=product_type, max_products=50)
-            payload["message"] = prompt.replace("{metadata}", metadata)
-        
-        agent_response = call_lyzr_api(payload, headers)
-        if not agent_response or not isinstance(agent_response, dict):
-            print(f"Invalid or missing Lyzr response for question: {agent_response}")
-            session["category"] = None
-            session["suggested_categories"] = suggested_categories
-            session["stage"] = "follow_up"
-            session["questions_asked"].append("Could you clarify what type of item you're looking for?")
-            session["user_responses"].append(request.message)
-            session["product_metadata"] = []
-            return {"response": "Could you clarify what type of item you're looking for?"}
-        
-        follow_up_question = agent_response.get("question", "Could you clarify what type of item you're looking for?")
+        follow_up_question = agent_response.get("question", "Could you provide more details about what you're looking for?")
         attributes = agent_response.get("attributes", [])
-        suggested_categories = agent_response.get("suggested_categories", suggested_categories)
         
         session["category"] = detected_category if detected_category != "None" else None
         session["suggested_categories"] = suggested_categories
@@ -848,7 +1103,6 @@ async def chat(request: ChatRequest):
                         variant_id = record.get('Variant ID', 'unknown-variant')
                         description = record.get('Product Description', '')[:200]
                         product_info += f"{i+1}. {title} (Variant ID: {variant_id})\n   Price: ${price:.2f}\n   URL: {url}\n   Description: {description}\n"
-                    # Store recommended products
                     session["recommended_products"] = [
                         {
                             "Title": record.get('Title', 'Unknown Product'),
@@ -863,7 +1117,7 @@ async def chat(request: ChatRequest):
             except Exception as e:
                 product_info = f"Error fetching products: {str(e)}"
             
-            session["last_product_info"] = product_info  # Store for debugging
+            session["last_product_info"] = product_info
             prompt = (
                 f"User query: {session['user_responses'][0]}\n\n"
                 f"Detected category: {session['category'] or 'None'}\n\n"
@@ -894,13 +1148,12 @@ async def chat(request: ChatRequest):
                 print(f"Invalid or missing Lyzr response for recommendation: {agent_response}")
                 agent_response = "I'm sorry, I couldn't find suitable products. Could you provide more details about what you're looking for?"
             
-            session["stage"] = "post_recommendation"  # New stage to preserve context
+            session["stage"] = "post_recommendation"
             session["user_responses"].append(request.message)
             session["questions_asked"].append("Recommendation provided")
             return {"response": agent_response}
 
     elif session["stage"] == "post_recommendation":
-        # Preserve context after recommendations
         product_type = session.get("product_type")
         metadata = get_product_metadata(category=session["category"], product_type=product_type, max_products=50) if session["category"] else get_product_metadata(limit_categories=session["suggested_categories"] or categories[:5], product_type=product_type, max_products=50)
         conversation_history = "\n".join(f"Q: {q}\nA: {a}" for q, a in zip(session["questions_asked"], session["user_responses"][1:]))
@@ -917,7 +1170,7 @@ async def chat(request: ChatRequest):
             if product_type:
                 subset = subset[
                     subset['Title'].str.lower().str.contains(product_type.lower()) |
-                    subset['Tags'].str.lower().str.contains(product_type.lower(), na=False) |
+                    subset['Tags'].str.lower().str.contains(session["product_type"].lower(), na=False) |
                     subset['Product Description'].str.lower().str.contains(product_type.lower(), na=False)
                 ]
             
@@ -946,7 +1199,7 @@ async def chat(request: ChatRequest):
                     {
                         "Title": record.get('Title', 'Unknown Product'),
                         "Variant ID": record.get('Variant ID', 'unknown-variant'),
-                        "Price": float(record.get('Variant Price', 0.0)),
+                        "Price": float(record.get('Variant ---\nPrice', 0.0)),
                         "URL": record.get('URL', 'https://example.com'),
                         "Description": record.get('Product Description', '')
                     } for record in records[:TOP_K]
@@ -991,6 +1244,7 @@ async def chat(request: ChatRequest):
         return {"response": agent_response}
 
     else:
+        # Reset session state
         session["category"] = None
         session["suggested_categories"] = []
         session["questions_asked"] = []
@@ -1001,23 +1255,30 @@ async def chat(request: ChatRequest):
         session["intent"] = None
         session["recommended_products"] = []
 
-
-        # Fuzzy match user input to categories
-        message_lower = request.message.lower()
+        # Check if the query is vague
+        is_vague, matched_item = is_query_vague(request.message, categories)
         
-        # Fuzzy match user input to categories
-        message_lower = request.message.lower()
-        product_type = None
-        if "nameplate" in request.message.lower():
-            product_type = "nameplate"
-            session["product_type"] = product_type
+        if is_vague:
+            session["stage"] = "follow_up"
+            session["questions_asked"].append("To help me find the perfect gift for your father, could you share some of his interests or hobbies?")
+            session["user_responses"].append(request.message)
+            session["product_metadata"] = []
+            return {"response": "To help me find the perfect gift for your father, could you share some of his interests or hobbies?"}
+        
+        # If a product type or category is detected
+        if matched_item:
+            if matched_item in categories:
+                session["category"] = matched_item
+                session["suggested_categories"] = []
+            else:
+                session["product_type"] = matched_item
         
         prompt = (
             f"User query: {request.message}\n\n"
             f"Available categories: {categories_str}\n\n"
             f"You are a shopping assistant for Zwende. Based on the user's query, identify the most relevant category. "
-            f"If the query specifies a product type (e.g., 'nameplate'), prioritize products matching that type in the metadata. "
-            f"If the query is vague, suggest up to 3 relevant categories based on the product metadata. "
+            f"If the query specifies a product type (e.g., 'nameplate' or '{session.get('product_type', '')}'), prioritize products matching that type in the metadata. "
+            f"If the query contains some context, suggest up to 3 relevant categories based on the product metadata and the query. "
             f"Generate one follow-up question to narrow down the user's preferences. "
             f"Exclude kids' products unless explicitly mentioned in the query. "
             f"Return a JSON object (not a string or code block) with 'category' (category name or 'None'), "
@@ -1036,61 +1297,39 @@ async def chat(request: ChatRequest):
             f"{{\n"
             f"  \"category\": \"None\",\n"
             f"  \"suggested_categories\": [],\n"
-            f"  \"question\": \"Could you clarify what type of item you're looking for?\",\n"
+            f"  \"question\": \"Could you provide more details about what you're looking for?\",\n"
             f"  \"attributes\": []\n"
             f"}}"
         )
         
-        category_prompt = (
-            f"User query: {request.message}\n\n"
-            f"Available categories: {categories_str}\n\n"
-            f"Identify the most relevant category or suggest up to 3 categories if the query is vague. "
-            f"If the query specifies a product type (e.g., 'nameplate'), prioritize that type. "
-            f"Exclude kids' products unless explicitly mentioned in the query. "
-            f"Return a JSON object (not a string or code block) with 'category' (category name or 'None') and 'suggested_categories' (list of up to 3 categories)."
-        )
+        # Prepare metadata
+        if session.get("category"):
+            metadata = get_product_metadata(category=session["category"], product_type=session.get("product_type"), max_products=50)
+        else:
+            metadata = get_product_metadata(limit_categories=categories[:5], product_type=session.get("product_type"), max_products=50)
+        
         payload = {
             "user_id": "pranav@lyzr.ai",
             "agent_id": "681b2915bb74a5da4a2eda8e",
             "session_id": request.session_id,
-            "message": category_prompt
+            "message": prompt.replace("{metadata}", metadata)
         }
         
         agent_response = call_lyzr_api(payload, headers)
-        if not agent_response or not isinstance(agent_response, dict) or "category" not in agent_response:
+        if not agent_response or not isinstance(agent_response, dict):
             print(f"Invalid or missing Lyzr response: {agent_response}")
             session["category"] = None
             session["suggested_categories"] = []
             session["stage"] = "follow_up"
-            session["questions_asked"].append("Could you clarify what type of item you're looking for?")
+            session["questions_asked"].append("Could you provide more details about what you're looking for?")
             session["user_responses"].append(request.message)
             session["product_metadata"] = []
-            return {"response": "Could you clarify what type of item you're looking for?"}
+            return {"response": "Could you provide more details about what you're looking for?"}
         
         detected_category = agent_response.get("category", "None").strip()
         suggested_categories = agent_response.get("suggested_categories", [])
-        
-        if detected_category != "None" and detected_category in categories:
-            metadata = get_product_metadata(category=detected_category, product_type=product_type, max_products=50)
-            payload["message"] = prompt.replace("{metadata}", metadata)
-        else:
-            metadata = get_product_metadata(limit_categories=suggested_categories or categories[:5], product_type=product_type, max_products=50)
-            payload["message"] = prompt.replace("{metadata}", metadata)
-        
-        agent_response = call_lyzr_api(payload, headers)
-        if not agent_response or not isinstance(agent_response, dict):
-            print(f"Invalid or missing Lyzr response for question: {agent_response}")
-            session["category"] = None
-            session["suggested_categories"] = suggested_categories
-            session["stage"] = "follow_up"
-            session["questions_asked"].append("Could you clarify what type of item you're looking for?")
-            session["user_responses"].append(request.message)
-            session["product_metadata"] = []
-            return {"response": "Could you clarify what type of item you're looking for?"}
-        
-        follow_up_question = agent_response.get("question", "Could you clarify what type of item you're looking for?")
+        follow_up_question = agent_response.get("question", "Could you provide more details about what you're looking for?")
         attributes = agent_response.get("attributes", [])
-        suggested_categories = agent_response.get("suggested_categories", suggested_categories)
         
         session["category"] = detected_category if detected_category != "None" else None
         session["suggested_categories"] = suggested_categories
