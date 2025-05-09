@@ -908,7 +908,7 @@ async def chat(request: ChatRequest):
                 f"Current user response: {request.message}\n\n"
                 f"Previous attributes identified: {', '.join(session['product_metadata'])}\n\n"
                 f"You are a shopping assistant for Zwende. Based on the conversation history, product metadata, and the user's latest response, "
-                f"generate one more follow-up question to further narrow down their preferences. "
+                f"generate one more follow-up question to further narrow down their preferences. based on available product metadata"
                 f"If the user specifies a product type (e.g., 'nameplate'), prioritize that type in the question and metadata. "
                 f"If no category was detected, try to identify a category based on the user's response and metadata. "
                 f"Exclude kids' products unless explicitly mentioned. "
