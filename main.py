@@ -23,11 +23,11 @@ load_dotenv()
 DATA_DIR = os.getenv("DATA_DIR", "./data")
 ORDER_FILE = os.path.join(DATA_DIR, "OrderExport230425.xlsx")
 PRODUCT_FILE = os.path.join(DATA_DIR, "ProductExport230425.xlsx")
-SMART_COLLECTION_FILE_ID = os.getenv("SMART_COLLECTION_FILE_ID")  # from .env
+# SMART_COLLECTION_FILE_ID = os.getenv("SMART_COLLECTION_FILE_ID")  # from .env
+SMART_FILE = os.path.join(DATA_DIR, "Smart Collection Export.csv")
 # SMART_FILE = os.path.join(DATA_DIR, "Smart Collections.csv")
-SMART_FILE = os.path.join(DATA_DIR, "Smart Collections.csv")
 
-gdown.download(id="1_dHsJNwBvsqKza2jWuy4Ml1nBTx54eIy", output=SMART_FILE, quiet=False)
+# gdown.download(id="1_dHsJNwBvsqKza2jWuy4Ml1nBTx54eIy", output=SMART_FILE, quiet=False)
 TOP_K = 5
 MAX_ROWS = int(os.getenv("MAX_ROWS", "50000"))
 
@@ -409,7 +409,7 @@ def get_product_metadata(category=None, limit_categories=None, product_type=None
 # --- Helper Function to Detect Intent ---
 def detect_intent(message):
     message_lower = message.lower().strip()
-    acknowledgment_keywords = ['thanks', 'thank you', 'okay', 'ok', 'great', 'cool']
+    acknowledgment_keywords = []
     price_keywords = ['expensive', 'cost', 'price', 'cheaper', 'affordable', 'budget']
     craftsmanship_keywords = ['craftsmanship', 'material', 'handcrafted', 'quality']
     debug_keywords = ['print all items', 'show all items', 'debug']
@@ -465,130 +465,16 @@ def get_gift_appropriate_categories(categories: List[str], metadata: List[Dict])
     """
     # Categories explicitly related to gifts or likely suitable for a father's birthday
     gift_priority = [
-  "Activity Toys",
-  "Address Signs",
-  "Aprons",
-  "Art & Craft Kits",
-  "Art & Crafting Materials",
-  "Artificial Flora",
-  "Arts & Crafts",
-  "Artwork",
-  "Baby Mobile Accessories",
-  "Baby Toys & Activity Equipment",
-  "Backpacks",
-  "Badge & Pass Holders",
-  "Bar Soap",
-  "Baskets",
-  "Bath Towels & Washcloths",
-  "Bookmarks",
-  "Books",
-  "Bowling Toys",
-  "Bowls",
-  "Bracelets",
-  "Brooches & Lapel Pins",
-  "Business Card Cases",
-  "Calendars, Organizers & Planners",
-  "Candle Holders",
-  "Candles",
-  "Candy & Chocolate",
-  "Card Games",
-  "Cardstock & Scrapbooking Paper",
-  "Chair & Sofa Cushions",
-  "Coasters",
-  "Coffee & Tea Cups",
-  "Corsages & Boutonnières",
-  "Cosmetic & Toiletry Bags",
-  "Costumes & Accessories",
-  "Craft Shapes & Bases",
-  "Crayons",
-  "Curtain Holdbacks & Tassels",
-  "Decor",
-  "Decorative Bells",
-  "Decorative Plaques",
-  "Decorative Plates",
-  "Desk Organizers",
-  "Dolls",
-  "Dolls, Playsets & Toy Figures",
-  "Dried Flowers",
-  "Drinkware",
   "Earrings",
-  "Educational Toys",
-  "Envelopes",
-  "Eyewear Cases & Holders",
-  "Figurines",
-  "File Folders",
-  "Folding Tables",
-  "Food & Beverage Carriers",
-  "Frames, Hoops & Stretchers",
-  "Games",
-  "Gift Boxes & Tins",
-  "Gift Giving",
-  "Handbags",
-  "Handbags, Wallets & Cases",
-  "Holiday Ornaments",
-  "Incense",
-  "Incense Holders",
-  "Jewelry Holders",
-  "Jewelry Sets",
-  "Jigsaw Puzzles",
-  "Keychains",
-  "Lamp Shades",
-  "Lamps",
-  "Light Ropes & Strings",
-  "Luggage & Bags",
-  "Luggage Accessories",
-  "Luggage Tags",
-  "Masks",
-  "Mirrors",
-  "Mobile Phone Stands",
-  "Model Making",
-  "Mugs",
-  "Name Plates",
-  "Necklaces",
-  "Night Lights & Ambient Lighting",
-  "Notebooks & Notepads",
-  "Outdoor Play Equipment",
-  "Outdoor Storage Boxes",
-  "Pacifiers & Teethers",
-  "Pen & Pencil Cases",
-  "Picture Frames",
-  "Piggy Banks & Money Jars",
-  "Pillows",
-  "Plates",
-  "Posters, Prints, & Visual Artwork",
-  "Pots & Planters",
-  "Puppet & Puppet Theater Accessories",
-  "Puppets & Marionettes",
-  "Refrigerator Magnets",
-  "Religious Items",
-  "Rings",
-  "Rugs",
-  "Sculptures & Statues",
-  "Seasonal & Holiday Decorations",
-  "Serveware",
-  "Serving Platters",
-  "Serving Trays",
-  "Shopping Totes",
-  "Spinning Tops",
-  "Stationery",
-  "Storage & Organization",
-  "Storage Chests",
-  "Suncatchers",
-  "Table Runners",
-  "Tableware",
-  "Tiki Torches & Oil Lamps",
-  "Towels",
-  "Toy Gift Baskets",
-  "Toy Playsets",
-  "Toys",
-  "Toys & Games",
-  "Travel Pouches",
-  "Uncategorized",
-  "Vases",
-  "Wall Clocks",
-  "Water Bottles",
-  "Wind Chimes"
-]
+"Art & Craft Kits",
+"Decor",
+"Jewelry Holders",
+"Candles",
+"Games & Card Games",
+"Handbags",
+"Serving Trays",
+"Necklaces",
+"Educational Toys"]
     
     # Filter categories that exist in the provided list
     valid_gift_categories = [cat for cat in gift_priority if cat in categories]
