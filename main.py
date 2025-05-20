@@ -1287,3 +1287,7 @@ async def chat(request: ChatRequest):
         end_time = time.time()
         print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
         return {"response": agent_response}
+    
+@app.get("/health", tags=["System"])
+def health_check():
+    return {"status": "healthy"}
