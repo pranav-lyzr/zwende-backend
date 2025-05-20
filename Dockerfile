@@ -12,15 +12,14 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code and startup script
+# Copy application code
 COPY . .
 
-# Set permissions and environment variables
-RUN chmod +x startup.sh && mkdir -p /app/data
+# Set environment variables
 ENV PORT=8003 DATA_DIR=/app/data PYTHONUNBUFFERED=1
 
 # Expose port
 EXPOSE 8003
 
-# Run the startup script
-CMD ["./startup.sh"]
+# Run the application directly with uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
