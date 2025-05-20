@@ -7,3 +7,18 @@ services:
       - "8003:8003"
     volumes:
       - ./data:/app/data
+      - .:/app  # Mount local directory to /app in container
+    environment:
+      - DATA_SOURCE=${DATA_SOURCE}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - LYZR_API_URL=${LYZR_API_URL}
+      - LYZR_API_KEY=${LYZR_API_KEY}
+      - LYZR_USER_ID=${LYZR_USER_ID}
+      - LYZR_AGENT_ID=${LYZR_AGENT_ID}
+      - MAX_ROWS=${MAX_ROWS}
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
+    command: uvicorn main:app --host 0.0.0.0 --port 8003 --reload  # Enable hot-reload

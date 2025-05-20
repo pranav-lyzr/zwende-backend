@@ -11,7 +11,7 @@ print("\nProductExport230425.xlsx columns:")
 print(products.columns.tolist())
 
 # Smart Collections.csv
-smart = pd.read_csv("data/Smart Collections.csv")
+smart = pd.read_csv("data/Smart Collection Export.csv")
 print("\nSmart Collections.csv columns:")
 print(smart.columns.tolist())
 print("\nSmart Collections.csv dtypes:")
