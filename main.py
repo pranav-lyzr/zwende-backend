@@ -897,9 +897,9 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
                     query += ' AND p."Type" = %(type)s'
                     params['type'] = filters["type"]
                     for i, tag in enumerate(filters["tags"]):
-                        query += f' AND LOWER(p."Tags") LIKE %({f"tag_{i}"})s'
+                        query += f' AND LOWER(p."Tags") LIKE %(tag_{i})s'
                         params[f'tag_{i}'] = f'%{tag.lower()}%'
-            
+                        print(f"Nameplate tag parameter: tag_{i} = {params[f'tag_{i}']}")  # Debug log
             # Handle name hangings-specific filters
             elif name_hanging_type:
                 filters = NAME_HANGINGS_FILTERS.get(name_hanging_type.lower())
@@ -907,9 +907,9 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
                     query += ' AND p."Type" = ANY(%(types)s)'
                     params['types'] = filters["type"]
                     for i, tag in enumerate(filters["tags"]):
-                        query += f' AND LOWER(p."Tags") LIKE %({f"tag_{i}"})s'
+                        query += f' AND LOWER(p."Tags") LIKE %(tag_{i})s'
                         params[f'tag_{i}'] = f'%{tag.lower()}%'
-            
+                        print(f"Name hanging tag parameter: tag_{i} = {params[f'tag_{i}']}")  # Debug log
             # Handle mugs-specific filters
             elif mug_type:
                 filters = MUGS_FILTERS.get(mug_type.lower())
@@ -920,17 +920,19 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
                         query += ' AND p."Vendor" = ANY(%(vendors)s)'
                         params['vendors'] = filters["vendor"]
                     for i, tag in enumerate(filters.get("tags", [])):
-                        query += f' AND LOWER(p."Tags") LIKE %({f"tag_{i}"})s'
+                        query += f' AND LOWER(p."Tags") LIKE %(tag_{i})s'
                         params[f'tag_{i}'] = f'%{tag.lower()}%'
+                        print(f"Mug tag parameter: tag_{i} = {params[f'tag_{i}']}")  # Debug log
                     if "title_contains" in filters:
                         for i, term in enumerate(filters["title_contains"]):
-                            query += f' AND LOWER(p."Title") LIKE %({f"title_contains_{i}"})s'
+                            query += f' AND LOWER(p."Title") LIKE %(title_contains_{i})s'
                             params[f'title_contains_{i}'] = f'%{term.lower()}%'
+                            print(f"Mug title_contains parameter: title_contains_{i} = {params[f'title_contains_{i}']}")  # Debug log
                     if "title_not_contains" in filters:
                         for i, term in enumerate(filters["title_not_contains"]):
-                            query += f' AND LOWER(p."Title") NOT LIKE %({f"title_not_contains_{i}"})s'
+                            query += f' AND LOWER(p."Title") NOT LIKE %(title_not_contains_{i})s'
                             params[f'title_not_contains_{i}'] = f'%{term.lower()}%'
-            
+                            print(f"Mug title_not_contains parameter: title_not_contains_{i} = {params[f'title_not_contains_{i}']}")  # Debug log
             # Existing filters
             elif category:
                 query += ' AND LOWER(p."Category: Name") = LOWER(%(category)s)'
@@ -941,20 +943,34 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
             if product_type and not (nameplate_type or name_hanging_type or mug_type):
                 query += ' AND (LOWER(p."Title") LIKE %(product_type)s OR LOWER(p."Tags") LIKE %(product_type)s OR LOWER(p."Product Description") LIKE %(product_type)s)'
                 params['product_type'] = f'%{product_type.lower()}%'
+                print(f"Product type parameter: product_type = {params['product_type']}")  # Debug log
             if theme:
                 query += ' AND (LOWER(p."Tags") LIKE %(theme)s OR LOWER(p."Title") LIKE %(theme)s OR LOWER(p."Product Description") LIKE %(theme)s)'
                 params['theme'] = f'%{theme.lower()}%'
+                print(f"Theme parameter: theme = {params['theme']}")  # Debug log
             
-            # Gender-based filtering
+            # Gender-based filtering with parameterized queries
             if recipient_context and recipient_context.get('gender') == 'male':
-                query += ' AND NOT (LOWER(p."Tags") LIKE \'%earrings%\' OR LOWER(p."Tags") LIKE \'%necklace%\' OR LOWER(p."Tags") LIKE \'%jewelry%\' OR LOWER(p."Category: Name") IN (\'jewelry sets\', \'earrings\'))'
+                query += ' AND NOT (LOWER(p."Tags") LIKE %(tag_earrings)s OR LOWER(p."Tags") LIKE %(tag_necklace)s OR LOWER(p."Tags") LIKE %(tag_jewelry)s OR LOWER(p."Category: Name") = ANY(%(excluded_categories)s))'
+                params['tag_earrings'] = '%earrings%'
+                params['tag_necklace'] = '%necklace%'
+                params['tag_jewelry'] = '%jewelry%'
+                params['excluded_categories'] = ['jewelry sets', 'earrings']
+                print(f"Gender-based parameters: tag_earrings={params['tag_earrings']}, tag_necklace={params['tag_necklace']}, tag_jewelry={params['tag_jewelry']}, excluded_categories={params['excluded_categories']}")  # Debug log
+            
             if recipient_context and recipient_context.get('occasion') == 'anniversary':
-                query += ' AND (LOWER(p."Tags") LIKE \'%personalized%\' OR LOWER(p."Tags") LIKE \'%wedding%\' OR LOWER(p."Tags") LIKE \'%love%\' OR LOWER(p."Category: Name") IN (\'home decor\', \'gift giving\', \'decor\'))'
+                query += ' AND (LOWER(p."Tags") LIKE %(tag_personalized)s OR LOWER(p."Tags") LIKE %(tag_wedding)s OR LOWER(p."Tags") LIKE %(tag_love)s OR LOWER(p."Category: Name") = ANY(%(anniversary_categories)s))'
+                params['tag_personalized'] = '%personalized%'
+                params['tag_wedding'] = '%wedding%'
+                params['tag_love'] = '%love%'
+                params['anniversary_categories'] = ['home decor', 'gift giving', 'decor']
+                print(f"Anniversary-based parameters: tag_personalized={params['tag_personalized']}, tag_wedding={params['tag_wedding']}, tag_love={params['tag_love']}, anniversary_categories={params['anniversary_categories']}")  # Debug log
 
             query += ' GROUP BY p."Handle", p."Variant ID", p."Title", p."Category: Name", p."Variant Price", p."URL", p."Product Description", p."Vendor", p."Tags", p."Image Src"'
             query += ' ORDER BY ' + ('p."Variant Price" ASC' if price_sensitive else 'total_sold DESC')
             query += ' LIMIT 50'
-            print(f"Executing product data query: {query} with params: {params}")
+            print(f"Executing product data query: {query}")
+            print(f"Query parameters: {params}")
             subset = pd.read_sql_query(query, DB_ENGINE, params=params)
             print(f"Product data query result: {len(subset)} rows")
             print(f"DataFrame columns: {list(subset.columns)}")
@@ -968,29 +984,6 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
             if 'variant_price' not in subset.columns:
                 print("Error: 'variant_price' column missing in DataFrame")
                 return "Error: 'variant_price' column not found in database query results.", [], 0
-
-            # Fill missing variant_price and Variant_ID within the same Handle
-            subset['variant_price'] = pd.to_numeric(subset['variant_price'], errors='coerce')
-            subset['Variant_ID'] = subset['Variant_ID'].astype(str)
-            for handle in subset['Handle'].unique():
-                handle_rows = subset[subset['Handle'] == handle]
-                # Get first non-null price
-                price_series = handle_rows['variant_price'].dropna()
-                non_null_price = price_series.iloc[0] if not price_series.empty else None
-                # Get first non-null variant ID
-                variant_id_series = handle_rows['Variant_ID'].replace('', pd.NA).dropna()
-                non_null_variant_id = variant_id_series.iloc[0] if not variant_id_series.empty else None
-                if pd.notnull(non_null_price):
-                    subset.loc[subset['Handle'] == handle, 'variant_price'] = subset.loc[subset['Handle'] == handle, 'variant_price'].fillna(non_null_price)
-                    print(f"Filled variant_price for Handle {handle} with {non_null_price}")
-                if pd.notnull(non_null_variant_id):
-                    subset.loc[subset['Handle'] == handle, 'Variant_ID'] = subset.loc[subset['Handle'] == handle, 'Variant_ID'].fillna(non_null_variant_id)
-                    print(f"Filled Variant_ID for Handle {handle} with {non_null_variant_id}")
-
-            # Drop rows with null prices after filling
-            if subset['variant_price'].isna().any():
-                print(f"Warning: {subset['variant_price'].isna().sum()} rows still have null variant_price after filling")
-                subset = subset.dropna(subset=['variant_price'])
 
             # Filter unique products by Handle to avoid duplicates
             unique_subset = []
@@ -1013,10 +1006,10 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
                 {
                     "product name": record.get('Title', 'Unknown Product'),
                     "description": strip_html(record.get('Product Description', '')),
-                    "price": float(record.get('variant_price', 0)),  # Include price as float
+                    "price": float(record.get('variant_price', 0)),
                     "Link to product": record.get('URL', 'https://example.com'),
                     "Image URL": record.get('Image Src', 'https://example.com/default-image.jpg')
-                } for record in records[:10]  # Limit to top 10
+                } for record in records[:10]
             ]
             total_products = len(records)
             print(f"Generated {len(products)} products, total available: {total_products}")
@@ -1024,7 +1017,8 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
     except Exception as e:
         print(f"Error fetching product data: {str(e)}")
         return f"Error fetching products: {str(e)}", [], 0
-
+    
+        
 def extract_recipient_context(message: str) -> Dict[str, str]:
     """Extract recipient context (gender, relation, occasion) from the user's message."""
     message_lower = message.lower().strip()
