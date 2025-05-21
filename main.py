@@ -15,6 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import QueuePool
 from fuzzywuzzy import process, fuzz
 import time
+from bs4 import BeautifulSoup 
 
 # Load environment variables
 load_dotenv()
@@ -88,6 +89,202 @@ class Product(BaseModel):
     URL: str
     total_sold: Optional[float] = None
     total_in_collection: Optional[int] = None
+
+
+# Hardcoded responses
+WELCOME_MESSAGE = {
+    "response": (
+        "Hey! Welcome to Zwende! ❤️\n\n"
+        "We have one-of-a-kind handcrafted products and DIY experiences from independent artists and artisans in India.✨\n\n"
+        "Please select an option below to proceed:"
+    ),
+    "type": "interactive",
+    "buttons": [
+        "Nameplates for Home",
+        "Name Hangings for Kids",
+        "Terracotta Mugs & Cups",
+        "Order Tracking",
+        "Others"
+    ],
+}
+
+NAMEPLATES_MESSAGE = {
+    "response": (
+        "🏡 Personalized Nameplates for Home\n"
+        "1600+ Unique Designs!\n\n"
+        "✨ Customize with names, fonts & colors\n"
+        "🎨 Handcrafted by skilled artists\n"
+        "🌿 Minimal, ethnic and photo personalized options\n"
+        "🚚 Free Shipping Above ₹999\n\n"
+        "Please select the type of nameplate:"
+    ),
+    "type": "interactive",
+    "buttons": [
+        "Outdoor Name Plates",
+        "Minimal Name Plates",
+        "Photo Personalized Nameplate",
+        "Ethnic Nameplates",
+        "Vernacular Nameplates"
+    ]
+}
+
+# Mapping of nameplate types to filters
+NAMEPLATE_FILTERS = {
+    "outdoor name plates": {
+        "type": "Nameboards",
+        "tags": ["utility:outdoors"],
+        "response": "Here are the top 10 best-selling Outdoor Name Plates:"
+    },
+    "minimal name plates": {
+        "type": "Nameboards",
+        "tags": ["style:minimalist", "demographic:adults"],
+        "response": "Here are the top 10 best-selling Minimal Name Plates:"
+    },
+    "photo personalized nameplate": {
+        "type": "Nameboards",
+        "tags": ["personalisation:photo based caricature"],
+        "response": "Here are the top 10 best-selling Photo Personalized Nameplates:"
+    },
+    "ethnic nameplates": {
+        "type": "Nameboards",
+        "tags": ["style:ethnic"],
+        "response": "Here are the top 10 best-selling Ethnic Nameplates:"
+    },
+    "vernacular nameplates": {
+        "type": "Nameboards",
+        "tags": ["type of nameboard:vernacular"],
+        "response": "Here are the top 10 best-selling Vernacular Nameplates:"
+    }
+}
+
+# Hardcoded message for Name Hangings for Kids
+NAME_HANGINGS_MESSAGE = {
+    "response": (
+        "🎁 Name Hangings for Kids – 1000+ Cute Designs!\n\n"
+        "✨ Customize with names, themes & colors\n"
+        "🎨 Handcrafted in non-toxic, child-safe materials\n"
+        "🦄 Cute designs for nurseries, rooms & doors\n"
+        "🚚 Free Shipping Above ₹999 | Bulk Orders Accepted\n\n"
+        "Please select the type of name hanging:"
+    ),
+    "type": "interactive",
+    "buttons": [
+        "Unicorn Theme 🦄",
+        "Superhero Theme 🦹‍♂️",
+        "Swing Designs 🪆",
+        "Moon Designs 🌝",
+        "Rainbow Designs 🌈",
+        "Jungle Theme 🐒",
+        "Themes for Boys ⚽",
+        "Themes for Girls 👸",
+        "Space Theme 🚀"
+    ]
+}
+
+# Hardcoded message for Terracotta Mugs & Cups
+MUGS_MESSAGE = {
+    "response": (
+        "🌿 Terracotta Mugs & Cups - 200+ Designs\n\n"
+        "✨ Personalize with photos & names\n"
+        "🎨 Hand-painted terracotta designs\n"
+        "🌿 Perfect for gifting & daily use\n"
+        "💸 Discount in Bulk Orders\n"
+        "🚚 Free Shipping Above ₹999 | Bulk Orders Accepted\n\n"
+        "Please select the type of mug:"
+    ),
+    "type": "interactive",
+    "buttons": [
+        "Mugs for Father's Day",
+        "Mugs for Kids",
+        "Mugs for Wedding",
+        "Mugs for Couple",
+        "Mugs Showing Hobbies"
+    ]
+}
+
+# Mapping of name hangings types to filters
+NAME_HANGINGS_FILTERS = {
+    "unicorn theme": {
+        "type": ["Nameboards", "Bunting"],
+        "tags": ["themes:unicorn", "demographic:kids"],
+        "response": "Here are the top 10 best-selling Unicorn Theme Name Hangings:"
+    },
+    "superhero theme": {
+        "type": ["Nameboards", "Bunting"],
+        "tags": ["themes:superhero", "demographic:kids"],
+        "response": "Here are the top 10 best-selling Superhero Theme Name Hangings:"
+    },
+    "swing designs": {
+        "type": ["Nameboards", "Bunting"],
+        "tags": ["themes:with swing", "demographic:kids"],
+        "response": "Here are the top 10 best-selling Swing Designs Name Hangings:"
+    },
+    "moon designs": {
+        "type": ["Nameboards", "Bunting"],
+        "tags": ["shape:moon", "demographic:kids"],
+        "response": "Here are the top 10 best-selling Moon Designs Name Hangings:"
+    },
+    "rainbow designs": {
+        "type": ["Nameboards", "Bunting"],
+        "tags": ["artform:macrame", "demographic:kids"],
+        "response": "Here are the top 10 best-selling Rainbow Designs Name Hangings:"
+    },
+    "jungle theme": {
+        "type": ["Nameboards", "Bunting"],
+        "tags": ["themes:jungle", "demographic:kids"],
+        "response": "Here are the top 10 best-selling Jungle Theme Name Hangings:"
+    },
+    "themes for boys": {
+        "type": ["Nameboards"],
+        "tags": ["demographic:kids", "category:name boards", "demographic:boy"],
+        "response": "Here are the top 10 best-selling Themes for Boys Name Hangings:"
+    },
+    "themes for girls": {
+        "type": ["Nameboards"],
+        "tags": ["demographic:kids", "category:name boards", "demographic:girl"],
+        "response": "Here are the top 10 best-selling Themes for Girls Name Hangings:"
+    },
+    "space theme": {
+        "type": ["Nameboards", "Bunting"],
+        "tags": ["themes:space", "demographic:kids"],
+        "response": "Here are the top 10 best-selling Space Theme Name Hangings:"
+    }
+}
+
+# Mapping of mugs types to filters
+MUGS_FILTERS = {
+    "mugs for father's day": {
+        "type": ["Mugs"],
+        "vendor": ["Happy Earth Studio"],
+        "tags": ["festival:father's day"],
+        "response": "Here are the top 10 best-selling Mugs for Father's Day:"
+    },
+    "mugs for kids": {
+        "type": ["Mugs"],
+        "vendor": ["Happy Earth Studio"],
+        "tags": ["demographic:kids"],
+        "title_not_contains": ["rakhi", "christmas", "planter"],
+        "response": "Here are the top 10 best-selling Mugs for Kids:"
+    },
+    "mugs for wedding": {
+        "type": ["Mugs"],
+        "vendor": ["Happy Earth Studio"],
+        "tags": ["occasion:wedding"],
+        "response": "Here are the top 10 best-selling Mugs for Wedding:"
+    },
+    "mugs for couple": {
+        "type": ["Mugs"],
+        "vendor": ["Happy Earth Studio"],
+        "tags": ["demographic:parents"],
+        "response": "Here are the top 10 best-selling Mugs for Couples:"
+    },
+    "mugs showing hobbies": {
+        "type": ["Mugs"],
+        "vendor": ["Happy Earth Studio"],
+        "title_contains": ["Hobby"],
+        "response": "Here are the top 10 best-selling Mugs Showing Hobbies:"
+    }
+}
 
 def get_product_metadata(category: Optional[str] = None, limit_categories: Optional[List[str]] = None, product_type: Optional[str] = None, theme: Optional[str] = None, max_products: int = 50) -> str:
     start_time = time.time()
@@ -660,8 +857,17 @@ def fetch_specific_product(product_title: str, product_type: Optional[str] = Non
     print("No matching product found")
     return None
 
-def fetch_product_data(category=None, suggested_categories=None, product_type=None, theme=None, price_sensitive=False, recipient_context: Dict[str, str] = None):
-    print(f"Fetching product data: category={category}, suggested_categories={suggested_categories}, product_type={product_type}, theme={theme}, price_sensitive={price_sensitive}, recipient_context={recipient_context}")
+
+def strip_html(text):
+    """Remove HTML tags from text."""
+    if not text:
+        return ""
+    soup = BeautifulSoup(text, "html.parser")
+    return soup.get_text(separator=" ").strip()
+
+
+def fetch_product_data(category=None, suggested_categories=None, product_type=None, theme=None, price_sensitive=False, recipient_context: Dict[str, str] = None, nameplate_type=None, name_hanging_type=None, mug_type=None):
+    print(f"Fetching product data: category={category}, suggested_categories={suggested_categories}, product_type={product_type}, theme={theme}, price_sensitive={price_sensitive}, recipient_context={recipient_context}, nameplate_type={nameplate_type}, name_hanging_type={name_hanging_type}, mug_type={mug_type}")
     
     try:
         if DATA_SOURCE == 'database':
@@ -670,8 +876,8 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
                     p."Handle", 
                     p."Variant ID" AS "Variant_ID", 
                     p."Title", 
-                    p."Category: Name" AS Category_Name, 
-                    p."Variant Price" AS Variant_Price, 
+                    p."Category: Name" AS category_name, 
+                    p."Variant Price" AS variant_price, 
                     p."URL", 
                     p."Product Description", 
                     p."Vendor", 
@@ -680,16 +886,59 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
                     COALESCE(SUM(o."Price: Total Line Items")::float, 0) AS total_sold
                 FROM products p
                 LEFT JOIN orders o ON p."Handle" = o."Line: Product Handle" AND p."Variant ID" = o."Line: Variant ID"
-                WHERE p."Variant ID" IS NOT NULL AND p."Variant Price" IS NOT NULL
+                WHERE p."Variant ID" IS NOT NULL
             """
             params = {}
-            if category:
+            
+            # Handle nameplate-specific filters
+            if nameplate_type:
+                filters = NAMEPLATE_FILTERS.get(nameplate_type.lower())
+                if filters:
+                    query += ' AND p."Type" = %(type)s'
+                    params['type'] = filters["type"]
+                    for i, tag in enumerate(filters["tags"]):
+                        query += f' AND LOWER(p."Tags") LIKE %({f"tag_{i}"})s'
+                        params[f'tag_{i}'] = f'%{tag.lower()}%'
+            
+            # Handle name hangings-specific filters
+            elif name_hanging_type:
+                filters = NAME_HANGINGS_FILTERS.get(name_hanging_type.lower())
+                if filters:
+                    query += ' AND p."Type" = ANY(%(types)s)'
+                    params['types'] = filters["type"]
+                    for i, tag in enumerate(filters["tags"]):
+                        query += f' AND LOWER(p."Tags") LIKE %({f"tag_{i}"})s'
+                        params[f'tag_{i}'] = f'%{tag.lower()}%'
+            
+            # Handle mugs-specific filters
+            elif mug_type:
+                filters = MUGS_FILTERS.get(mug_type.lower())
+                if filters:
+                    query += ' AND p."Type" = ANY(%(types)s)'
+                    params['types'] = filters["type"]
+                    if "vendor" in filters:
+                        query += ' AND p."Vendor" = ANY(%(vendors)s)'
+                        params['vendors'] = filters["vendor"]
+                    for i, tag in enumerate(filters.get("tags", [])):
+                        query += f' AND LOWER(p."Tags") LIKE %({f"tag_{i}"})s'
+                        params[f'tag_{i}'] = f'%{tag.lower()}%'
+                    if "title_contains" in filters:
+                        for i, term in enumerate(filters["title_contains"]):
+                            query += f' AND LOWER(p."Title") LIKE %({f"title_contains_{i}"})s'
+                            params[f'title_contains_{i}'] = f'%{term.lower()}%'
+                    if "title_not_contains" in filters:
+                        for i, term in enumerate(filters["title_not_contains"]):
+                            query += f' AND LOWER(p."Title") NOT LIKE %({f"title_not_contains_{i}"})s'
+                            params[f'title_not_contains_{i}'] = f'%{term.lower()}%'
+            
+            # Existing filters
+            elif category:
                 query += ' AND LOWER(p."Category: Name") = LOWER(%(category)s)'
                 params['category'] = category
             elif suggested_categories:
                 query += ' AND LOWER(p."Category: Name") = ANY(%(categories)s)'
                 params['categories'] = [c.lower() for c in suggested_categories]
-            if product_type:
+            if product_type and not (nameplate_type or name_hanging_type or mug_type):
                 query += ' AND (LOWER(p."Title") LIKE %(product_type)s OR LOWER(p."Tags") LIKE %(product_type)s OR LOWER(p."Product Description") LIKE %(product_type)s)'
                 params['product_type'] = f'%{product_type.lower()}%'
             if theme:
@@ -708,50 +957,73 @@ def fetch_product_data(category=None, suggested_categories=None, product_type=No
             print(f"Executing product data query: {query} with params: {params}")
             subset = pd.read_sql_query(query, DB_ENGINE, params=params)
             print(f"Product data query result: {len(subset)} rows")
+            print(f"DataFrame columns: {list(subset.columns)}")
+            print(f"Sample data (first 2 rows): {subset.head(2).to_dict(orient='records')}")
 
             if subset.empty:
                 print("No products found for the specified criteria.")
-                return f"No products found for the specified criteria.", []
+                return "No products found for the specified criteria.", [], 0
 
+            # Validate variant_price column
+            if 'variant_price' not in subset.columns:
+                print("Error: 'variant_price' column missing in DataFrame")
+                return "Error: 'variant_price' column not found in database query results.", [], 0
+
+            # Fill missing variant_price and Variant_ID within the same Handle
+            subset['variant_price'] = pd.to_numeric(subset['variant_price'], errors='coerce')
+            subset['Variant_ID'] = subset['Variant_ID'].astype(str)
+            for handle in subset['Handle'].unique():
+                handle_rows = subset[subset['Handle'] == handle]
+                # Get first non-null price
+                price_series = handle_rows['variant_price'].dropna()
+                non_null_price = price_series.iloc[0] if not price_series.empty else None
+                # Get first non-null variant ID
+                variant_id_series = handle_rows['Variant_ID'].replace('', pd.NA).dropna()
+                non_null_variant_id = variant_id_series.iloc[0] if not variant_id_series.empty else None
+                if pd.notnull(non_null_price):
+                    subset.loc[subset['Handle'] == handle, 'variant_price'] = subset.loc[subset['Handle'] == handle, 'variant_price'].fillna(non_null_price)
+                    print(f"Filled variant_price for Handle {handle} with {non_null_price}")
+                if pd.notnull(non_null_variant_id):
+                    subset.loc[subset['Handle'] == handle, 'Variant_ID'] = subset.loc[subset['Handle'] == handle, 'Variant_ID'].fillna(non_null_variant_id)
+                    print(f"Filled Variant_ID for Handle {handle} with {non_null_variant_id}")
+
+            # Drop rows with null prices after filling
+            if subset['variant_price'].isna().any():
+                print(f"Warning: {subset['variant_price'].isna().sum()} rows still have null variant_price after filling")
+                subset = subset.dropna(subset=['variant_price'])
+
+            # Filter unique products by Handle to avoid duplicates
             unique_subset = []
-            seen_titles = set()
+            seen_handles = set()
             for _, row in subset.iterrows():
-                title = row['Title'].lower()
-                if not any(title.startswith(seen) or seen.startswith(title) for seen in seen_titles):
-                    unique_subset.append(row)
-                    seen_titles.add(title)
+                handle = row['Handle']
+                if handle not in seen_handles:
+                    if row['Image Src'] and row['Image Src'] != 'None':
+                        unique_subset.append(row)
+                        seen_handles.add(handle)
             subset = pd.DataFrame(unique_subset)
             print(f"Filtered unique products: {len(subset)} rows")
 
-            records = subset.to_dict(orient='records')
-            product_info = f"Available products ({'sorted by price' if price_sensitive else 'top-selling'}, up to 50):\n"
-            for i, record in enumerate(records[:50]):
-                title = record.get('Title', 'Unknown Product')
-                price = record.get('Variant_Price', 0.0)
-                url = record.get('URL', 'https://example.com')
-                variant_id = record.get('Variant_ID', 'unknown-variant')
-                description = record.get('Product Description', '')[:200]
-                image_src = record.get('Image Src', 'https://example.com/image.jpg')
-                product_info += f"{i+1}. {title} (Variant ID: {variant_id})\n   Price: ${price:.2f}\n   URL: {url}\n   Description: {description}\n   Image: {image_src}\n"
+            if subset.empty:
+                print("No valid products found after filtering.")
+                return "No valid products found (all products have missing images or prices).", [], 0
 
-            recommended_products = [
+            records = subset.to_dict(orient='records')
+            products = [
                 {
-                    "Title": record.get('Title', 'Unknown Product'),
-                    "Variant ID": record.get('Variant_ID', 'unknown-variant'),
-                    "Price": float(record.get('Variant_Price', 0.0)),
-                    "URL": record.get('URL', 'https://example.com'),
-                    "Description": record.get('Product Description', ''),
-                    "Vendor": record.get('Vendor', ''),
-                    "Tags": record.get('Tags', ''),
-                    "Image Src": record.get('Image Src', 'https://example.com/image.jpg')
-                } for record in records[:TOP_K]
+                    "product name": record.get('Title', 'Unknown Product'),
+                    "description": strip_html(record.get('Product Description', '')),
+                    "price": float(record.get('variant_price', 0)),  # Include price as float
+                    "Link to product": record.get('URL', 'https://example.com'),
+                    "Image URL": record.get('Image Src', 'https://example.com/default-image.jpg')
+                } for record in records[:10]  # Limit to top 10
             ]
-            print(f"Generated product info: {product_info[:500]}... (truncated)")
-            print(f"Recommended products: {recommended_products}")
-            return product_info, recommended_products
+            total_products = len(records)
+            print(f"Generated {len(products)} products, total available: {total_products}")
+            return None, products, total_products
     except Exception as e:
         print(f"Error fetching product data: {str(e)}")
-        return f"Error fetching products: {str(e)}", []
+        return f"Error fetching products: {str(e)}", [], 0
 
 def extract_recipient_context(message: str) -> Dict[str, str]:
     """Extract recipient context (gender, relation, occasion) from the user's message."""
@@ -803,6 +1075,7 @@ async def chat(request: ChatRequest):
         "x-api-key": LYZR_API_KEY
     }
 
+    # Initialize session if not exists
     if request.session_id not in SESSION_STATE:
         SESSION_STATE[request.session_id] = {
             "category": None,
@@ -819,17 +1092,13 @@ async def chat(request: ChatRequest):
             "theme": None,
             "session_id": request.session_id,
             "context": None,
-            "recipient_context": {}
+            "recipient_context": {},
+            "flow_state": "initial"
         }
         print(f"Initialized new session: {SESSION_STATE[request.session_id]}")
 
     session = SESSION_STATE[request.session_id]
-    session["intent"] = detect_intent(request.message, session, headers)
-    print(f"Updated session with intent: {session['intent']}")
-
-    categories = json.loads(get_categories().body.decode('utf-8'))
-    print(f"Categories for chat: {categories}")
-
+    message_lower = request.message.lower().strip()
     session["user_responses"].append(request.message)
     print(f"Appended user response: {session['user_responses']}")
 
@@ -838,11 +1107,399 @@ async def chat(request: ChatRequest):
         session["recipient_context"] = extract_recipient_context(request.message)
         print(f"Updated recipient context: {session['recipient_context']}")
 
+    # Handle hardcoded flow
+    if session["flow_state"] == "initial":
+        # Check for greeting
+        greetings = ['hi', 'hey', 'heyy', 'heyyy', 'hello', 'hola']
+        if any(message_lower.startswith(g) for g in greetings):
+            session["intent"] = "greeting"
+            session["category"] = None
+            session["context"] = "greeting"
+            session["suggested_categories"] = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs", "Gift Giving"]
+            session["stage"] = "follow_up"
+            session["flow_state"] = "awaiting_category"
+            session["questions_asked"].append(WELCOME_MESSAGE["response"])
+            print(f"Greeting detected, returning welcome message with buttons")
+
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return WELCOME_MESSAGE
+
+        # Check for direct category selection
+        category_map = {
+            "1": "Name Plates",
+            "nameplates for home": "Name Plates",
+            "name plates": "Name Plates",
+            "2": "Dolls, Playsets & Toy Figures",
+            "name hangings for kids": "Dolls, Playsets & Toy Figures",
+            "3": "Mugs",
+            "terracotta mugs & cups": "Mugs",
+            "4": "Order Tracking",
+            "order tracking": "Order Tracking",
+            "5": "Others",
+            "others": "Others"
+        }
+        selected_category = None
+        for key, value in category_map.items():
+            if message_lower == key or key in message_lower:
+                selected_category = value
+                break
+
+        if selected_category:
+            if selected_category == "Name Plates":
+                session["category"] = selected_category
+                session["flow_state"] = "nameplate_selection"
+                session["questions_asked"].append(NAMEPLATES_MESSAGE["response"])
+                print(f"Nameplates for Home selected, moving to nameplate_selection")
+
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAMEPLATES_MESSAGE
+            elif selected_category == "Dolls, Playsets & Toy Figures":
+                session["category"] = selected_category
+                session["flow_state"] = "name_hanging_selection"
+                session["questions_asked"].append(NAME_HANGINGS_MESSAGE["response"])
+                print(f"Name Hangings for Kids selected, moving to name_hanging_selection")
+
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAME_HANGINGS_MESSAGE
+            elif selected_category == "Mugs":
+                session["category"] = selected_category
+                session["flow_state"] = "mug_selection"
+                session["questions_asked"].append(MUGS_MESSAGE["response"])
+                print(f"Terracotta Mugs & Cups selected, moving to mug_selection")
+
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return MUGS_MESSAGE
+            elif selected_category == "Order Tracking":
+                session["flow_state"] = "order_tracking"
+                session["questions_asked"].append("Please use  https://www.zwende.com/pages/track-your-order to track your order")
+                print(f"Order Tracking selected")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": "Please use  https://www.zwende.com/pages/track-your-order to track your order",
+                    "type": "text"
+                }
+            else:
+                session["category"] = selected_category
+                session["flow_state"] = "recommendation"
+                session["stage"] = "recommendation"
+                print(f"Category {selected_category} selected, moving to recommendation")
+
+                product_info, recommended_products, total_products = fetch_product_data(
+                    category=session["category"],
+                    price_sensitive=session["price_sensitive"],
+                    recipient_context=session["recipient_context"]
+                )
+                session["last_product_info"] = product_info
+                session["recommended_products"] = recommended_products
+                session["questions_asked"].append("Recommendation provided")
+
+                response = {
+                    "response": f"Here are the top {TOP_K} products in {selected_category}:\n{product_info}",
+                    "type": "text"
+                }
+                print(f"Generated response: {response['response'][:500]}... (truncated)")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return response
+
+    elif session["flow_state"] == "awaiting_category":
+        # Handle category selection from welcome message
+        category_map = {
+            "1": "Name Plates",
+            "nameplates for home": "Name Plates",
+            "name plates": "Name Plates",
+            "2": "Dolls, Playsets & Toy Figures",
+            "name hangings for kids": "Dolls, Playsets & Toy Figures",
+            "3": "Mugs",
+            "terracotta mugs & cups": "Mugs",
+            "4": "Order Tracking",
+            "order tracking": "Order Tracking",
+            "5": "Others",
+            "others": "Others"
+        }
+        selected_category = None
+        for key, value in category_map.items():
+            if message_lower == key or key in message_lower:
+                selected_category = value
+                break
+
+        if selected_category:
+            if selected_category == "Name Plates":
+                session["category"] = selected_category
+                session["flow_state"] = "nameplate_selection"
+                session["questions_asked"].append(NAMEPLATES_MESSAGE["response"])
+                print(f"Nameplates for Home selected, moving to nameplate_selection")
+
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAMEPLATES_MESSAGE
+            elif selected_category == "Dolls, Playsets & Toy Figures":
+                session["category"] = selected_category
+                session["flow_state"] = "name_hanging_selection"
+                session["questions_asked"].append(NAME_HANGINGS_MESSAGE["response"])
+                print(f"Name Hangings for Kids selected, moving to name_hanging_selection")
+
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAME_HANGINGS_MESSAGE
+            elif selected_category == "Mugs":
+                session["category"] = selected_category
+                session["flow_state"] = "mug_selection"
+                session["questions_asked"].append(MUGS_MESSAGE["response"])
+                print(f"Terracotta Mugs & Cups selected, moving to mug_selection")
+
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return MUGS_MESSAGE
+            elif selected_category == "Order Tracking":
+                session["flow_state"] = "order_tracking"
+                session["questions_asked"].append("Please use  https://www.zwende.com/pages/track-your-order to track your order")
+                print(f"Order Tracking selected")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": "Please use  https://www.zwende.com/pages/track-your-order to track your order",
+                    "type": "text"
+                }
+            else:
+                # Reset to LLM flow for "Others"
+                session["category"] = None
+                session["suggested_categories"] = []
+                session["stage"] = "category_detection"
+                session["flow_state"] = "default"
+                session["product_type"] = None
+                session["theme"] = None
+                session["questions_asked"].append("Can you tell me more about what you're looking for, like the type of product or theme?")
+                print(f"Others selected, resetting to LLM flow with category_detection")
+
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": "Can you tell me more about what you're looking for, like the type of product or theme?",
+                    "type": "text"
+                }
+    elif session["flow_state"] == "nameplate_selection":
+        # Handle nameplate type selection
+        nameplate_type_map = {
+            "1": "outdoor name plates",
+            "outdoor name plates": "outdoor name plates",
+            "2": "minimal name plates",
+            "minimal name plates": "minimal name plates",
+            "3": "photo personalized nameplate",
+            "photo personalized nameplate": "photo personalized nameplate",
+            "4": "ethnic nameplates",
+            "ethnic nameplates": "ethnic nameplates",
+            "5": "vernacular nameplates",
+            "vernacular nameplates": "vernacular nameplates"
+        }
+        selected_nameplate_type = None
+        for key, value in nameplate_type_map.items():
+            if message_lower == key or key in message_lower:
+                selected_nameplate_type = value
+                break
+
+        if selected_nameplate_type and selected_nameplate_type in NAMEPLATE_FILTERS:
+            session["flow_state"] = "recommendation"
+            session["stage"] = "recommendation"
+            session["product_type"] = "Nameboards"
+            filters = NAMEPLATE_FILTERS[selected_nameplate_type]
+            print(f"Nameplate type {selected_nameplate_type} selected, fetching products")
+
+            error_message, recommended_products, total_products = fetch_product_data(
+                category=session["category"],
+                product_type=filters["type"],
+                nameplate_type=selected_nameplate_type,
+                price_sensitive=session["price_sensitive"],
+                recipient_context=session["recipient_context"]
+            )
+            session["last_product_info"] = error_message
+            session["recommended_products"] = recommended_products
+            session["questions_asked"].append("Recommendation provided")
+
+            if error_message:
+                print(f"Error in fetch_product_data: {error_message}")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": error_message,
+                    "type": "text"
+                }
+
+            # Include representative image
+            representative_image = recommended_products[0]["Image URL"] if recommended_products else None
+            response = {
+                "response": filters["response"],
+                "type": "interactive_prod",
+                "image_url": representative_image,
+                "products": recommended_products,
+                "metadata": {
+                    "total_products": total_products
+                }
+            }
+            print(f"Generated response: {response['response']} with {len(recommended_products)} products")
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return response
+        else:
+            # Invalid selection, repeat nameplate options
+            session["questions_asked"].append(NAMEPLATES_MESSAGE["response"])
+            print(f"Invalid nameplate selection, repeating options")
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return NAMEPLATES_MESSAGE
+
+    elif session["flow_state"] == "name_hanging_selection":
+        # Handle name hanging type selection
+        name_hanging_type_map = {
+            "1": "unicorn theme",
+            "unicorn theme": "unicorn theme",
+            "2": "superhero theme",
+            "superhero theme": "superhero theme",
+            "3": "swing designs",
+            "swing designs": "swing designs",
+            "4": "moon designs",
+            "moon designs": "moon designs",
+            "5": "rainbow designs",
+            "rainbow designs": "rainbow designs",
+            "6": "jungle theme",
+            "jungle theme": "jungle theme",
+            "7": "themes for boys",
+            "themes for boys": "themes for boys",
+            "8": "themes for girls",
+            "themes for girls": "themes for girls",
+            "9": "space theme",
+            "space theme": "space theme"
+        }
+        selected_name_hanging_type = None
+        for key, value in name_hanging_type_map.items():
+            if message_lower == key or key in message_lower:
+                selected_name_hanging_type = value
+                break
+
+        if selected_name_hanging_type and selected_name_hanging_type in NAME_HANGINGS_FILTERS:
+            session["flow_state"] = "recommendation"
+            session["stage"] = "recommendation"
+            session["product_type"] = "Nameboards"
+            filters = NAME_HANGINGS_FILTERS[selected_name_hanging_type]
+            print(f"Name hanging type {selected_name_hanging_type} selected, fetching products")
+
+            error_message, recommended_products, total_products = fetch_product_data(
+                category=session["category"],
+                product_type=filters["type"][0],  # Use first type for product_type
+                name_hanging_type=selected_name_hanging_type,
+                price_sensitive=session["price_sensitive"],
+                recipient_context=session["recipient_context"]
+            )
+            session["last_product_info"] = error_message
+            session["recommended_products"] = recommended_products
+            session["questions_asked"].append("Recommendation provided")
+
+            if error_message:
+                print(f"Error in fetch_product_data: {error_message}")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": error_message,
+                    "type": "text"
+                }
+
+            # Include representative image
+            representative_image = recommended_products[0]["Image URL"] if recommended_products else None
+            response = {
+                "response": filters["response"],
+                "type": "interactive_prod",
+                "image_url": representative_image,
+                "products": recommended_products,  # Now includes price
+                "metadata": {
+                    "total_products": total_products
+                }
+            }
+            print(f"Generated response: {response['response']} with {len(recommended_products)} products")
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return response
+
+    elif session["flow_state"] == "mug_selection":
+        # Handle mug type selection
+        mug_type_map = {
+            "1": "mugs for father's day",
+            "mugs for father's day": "mugs for father's day",
+            "2": "mugs for kids",
+            "mugs for kids": "mugs for kids",
+            "3": "mugs for wedding",
+            "mugs for wedding": "mugs for wedding",
+            "4": "mugs for couple",
+            "mugs for couple": "mugs for couple",
+            "5": "mugs showing hobbies",
+            "mugs showing hobbies": "mugs showing hobbies"
+        }
+        selected_mug_type = None
+        for key, value in mug_type_map.items():
+            if message_lower == key or key in message_lower:
+                selected_mug_type = value
+                break
+
+        if selected_mug_type and selected_mug_type in MUGS_FILTERS:
+            session["flow_state"] = "recommendation"
+            session["stage"] = "recommendation"
+            session["product_type"] = "Mugs"
+            filters = MUGS_FILTERS[selected_mug_type]
+            print(f"Mug type {selected_mug_type} selected, fetching products")
+
+            error_message, recommended_products, total_products = fetch_product_data(
+                category=session["category"],
+                product_type=filters["type"][0],  # Use first type for product_type
+                mug_type=selected_mug_type,
+                price_sensitive=session["price_sensitive"],
+                recipient_context=session["recipient_context"]
+            )
+            session["last_product_info"] = error_message
+            session["recommended_products"] = recommended_products
+            session["questions_asked"].append("Recommendation provided")
+
+            if error_message:
+                print(f"Error in fetch_product_data: {error_message}")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": error_message,
+                    "type": "text"
+                }
+
+            # Include representative image
+            representative_image = recommended_products[0]["Image URL"] if recommended_products else None
+            response = {
+                "response": filters["response"],
+                "type": "interactive_prod",
+                "image_url": representative_image,
+                "products": recommended_products,  # Now includes price
+                "metadata": {
+                    "total_products": total_products
+                }
+            }
+            print(f"Generated response: {response['response']} with {len(recommended_products)} products")
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return response
+
+    # Default flow for non-hardcoded inputs
+    session["flow_state"] = "default"
+    session["intent"] = detect_intent(request.message, session, headers)
+    print(f"Falling back to default intent detection: {session['intent']}")
+
+    categories = json.loads(get_categories().body.decode('utf-8'))
+    print(f"Categories for chat: {categories}")
+
     # Temporary fallback for theme detection
     if not session.get("theme"):
-        theme_keywords = ['ganesha', 'religious', 'floral', 'modern', 'traditional']
+        theme_keywords = ['ganesha', 'religious', 'floral', 'modern', 'traditional', 'unicorn', 'superhero', 'jungle', 'space']
         for keyword in theme_keywords:
-            if keyword in request.message.lower():
+            if keyword in message_lower:
                 session["theme"] = keyword
                 print(f"Detected theme via fallback: {session['theme']}")
                 break
@@ -851,29 +1508,6 @@ async def chat(request: ChatRequest):
         session["price_sensitive"] = True
         print(f"Set price_sensitive to True due to price_concern intent")
 
-    welcome_message = (
-        "Hey! Welcome to Zwende! ❤️\n\n"
-        "We have one-of-a-kind handcrafted products and DIY experiences from independent artists and artisans in India.✨\n\n"
-        "Please select an option below to proceed.\n\n"
-        "1. Nameplates for home\n"
-        "2. Name Hangings for Kids\n"
-        "3. Terracotta Mugs & Cups\n"
-        "4. Order Tracking\n"
-        "5. Others"
-    )
-
-    if session["intent"] == "greeting":
-        session["category"] = None
-        session["context"] = "greeting"
-        session["suggested_categories"] = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs", "Gift Giving"]
-        session["stage"] = "follow_up"
-        session["questions_asked"].append(welcome_message)
-        print(f"Greeting detected, returning welcome message")
-
-        end_time = time.time()
-        print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-        return {"response": welcome_message}
-    
     if session["stage"] == "category_detection" or session["intent"] == "category_change":
         print(f"Processing category_detection stage (intent: {session['intent']})")
         try:
@@ -952,13 +1586,35 @@ async def chat(request: ChatRequest):
             
             end_time = time.time()
             print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-            return {"response": follow_up_question}
+            return {"response": follow_up_question, "type": "text"}
 
         if matched_item:
             if matched_item in categories:
                 session["category"] = matched_item
                 session["suggested_categories"] = []
                 print(f"Matched category: {matched_item}")
+                # Check for hardcoded category flows
+                if matched_item == "Name Plates":
+                    session["flow_state"] = "nameplate_selection"
+                    session["questions_asked"].append(NAMEPLATES_MESSAGE["response"])
+                    print(f"Name Plates category matched, moving to nameplate_selection")
+                    end_time = time.time()
+                    print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                    return NAMEPLATES_MESSAGE
+                elif matched_item == "Dolls, Playsets & Toy Figures":
+                    session["flow_state"] = "name_hanging_selection"
+                    session["questions_asked"].append(NAME_HANGINGS_MESSAGE["response"])
+                    print(f"Name Hangings for Kids category matched, moving to name_hanging_selection")
+                    end_time = time.time()
+                    print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                    return NAME_HANGINGS_MESSAGE
+                elif matched_item == "Mugs":
+                    session["flow_state"] = "mug_selection"
+                    session["questions_asked"].append(MUGS_MESSAGE["response"])
+                    print(f"Terracotta Mugs & Cups category matched, moving to mug_selection")
+                    end_time = time.time()
+                    print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                    return MUGS_MESSAGE
             elif matched_item in theme_keywords:
                 session["theme"] = matched_item
                 print(f"Matched theme: {matched_item}")
@@ -1008,16 +1664,41 @@ async def chat(request: ChatRequest):
         }
         print(f"Agent response for specific query: {agent_response}")
 
-        # Handle agent_response to avoid NoneType errors
-        detected_category = agent_response.get("category")  # Get category, allow None
+        detected_category = agent_response.get("category")
         if detected_category == "None" or detected_category is None:
-            detected_category = None  # Normalize to None
+            detected_category = None
         else:
-            detected_category = str(detected_category).strip()  # Strip only if not None
+            detected_category = str(detected_category).strip()
         suggested_categories = agent_response.get("suggested_categories", [])
         follow_up_question = agent_response.get("question", "Can you share more details about what you're looking for?")
         attributes = agent_response.get("attributes", [])
         theme = agent_response.get("theme", session.get("theme"))
+
+        # Check for hardcoded category flows
+        if detected_category == "Name Plates":
+            session["category"] = detected_category
+            session["flow_state"] = "nameplate_selection"
+            session["questions_asked"].append(NAMEPLATES_MESSAGE["response"])
+            print(f"Name Plates category detected by agent, moving to nameplate_selection")
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return NAMEPLATES_MESSAGE
+        elif detected_category == "Dolls, Playsets & Toy Figures":
+            session["category"] = detected_category
+            session["flow_state"] = "name_hanging_selection"
+            session["questions_asked"].append(NAME_HANGINGS_MESSAGE["response"])
+            print(f"Name Hangings for Kids category detected by agent, moving to name_hanging_selection")
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return NAME_HANGINGS_MESSAGE
+        elif detected_category == "Mugs":
+            session["category"] = detected_category
+            session["flow_state"] = "mug_selection"
+            session["questions_asked"].append(MUGS_MESSAGE["response"])
+            print(f"Terracotta Mugs & Cups category detected by agent, moving to mug_selection")
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return MUGS_MESSAGE
 
         session["category"] = detected_category if detected_category and detected_category in categories else None
         session["suggested_categories"] = suggested_categories
@@ -1029,7 +1710,7 @@ async def chat(request: ChatRequest):
 
         end_time = time.time()
         print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-        return {"response": follow_up_question}
+        return {"response": follow_up_question, "type": "text"}
 
     elif session["stage"] == "follow_up":
         print("Processing follow_up stage")
@@ -1069,7 +1750,7 @@ async def chat(request: ChatRequest):
                 f"Exclude kids' products unless explicitly mentioned. "
                 f"For male recipients, avoid female-oriented products like jewelry unless requested. "
                 f"For anniversaries, prioritize couple-oriented items like home decor. "
-                f"Return a JSON object with 'category' (update if clearer), 'question' (context-aware follow-up), 'attributes' (list of product attributes), and 'theme' (if detected)."
+                f"Return a JSON object with 'category' (update if clearer), 'question', 'attributes' (list of product attributes), and 'theme' (if detected)."
             )
             print(f"Prompt for follow_up: {prompt}")
 
@@ -1093,6 +1774,32 @@ async def chat(request: ChatRequest):
             updated_category = agent_response.get("category", session["category"] or "None")
             theme = agent_response.get("theme", session.get("theme"))
 
+            # Check for hardcoded category flows
+            if updated_category == "Name Plates":
+                session["category"] = updated_category
+                session["flow_state"] = "nameplate_selection"
+                session["questions_asked"].append(NAMEPLATES_MESSAGE["response"])
+                print(f"Name Plates category detected in follow_up, moving to nameplate_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAMEPLATES_MESSAGE
+            elif updated_category == "Dolls, Playsets & Toy Figures":
+                session["category"] = updated_category
+                session["flow_state"] = "name_hanging_selection"
+                session["questions_asked"].append(NAME_HANGINGS_MESSAGE["response"])
+                print(f"Name Hangings for Kids category detected in follow_up, moving to name_hanging_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAME_HANGINGS_MESSAGE
+            elif updated_category == "Mugs":
+                session["category"] = updated_category
+                session["flow_state"] = "mug_selection"
+                session["questions_asked"].append(MUGS_MESSAGE["response"])
+                print(f"Terracotta Mugs & Cups category detected in follow_up, moving to mug_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return MUGS_MESSAGE
+
             if updated_category != "None" and updated_category in categories:
                 session["category"] = updated_category
                 session["suggested_categories"] = []
@@ -1103,11 +1810,12 @@ async def chat(request: ChatRequest):
             
             end_time = time.time()
             print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-            return {"response": follow_up_question}
+            return {"response": follow_up_question, "type": "text"}
 
         else:
             print("Moving to recommendation stage")
             session["stage"] = "recommendation"
+            session["flow_state"] = "recommendation"
             product_type = session.get("product_type")
             theme = session.get("theme")
             metadata = get_product_metadata(
@@ -1126,7 +1834,7 @@ async def chat(request: ChatRequest):
             conversation_history = "\n".join(f"Q: {q}\nA: {a}" for q, a in zip(session["questions_asked"], session["user_responses"][1:]))
             print(f"Conversation history for recommendation: {conversation_history}")
 
-            product_info, recommended_products = fetch_product_data(
+            product_info, recommended_products, total_products = fetch_product_data(
                 category=session["category"],
                 suggested_categories=session["suggested_categories"],
                 product_type=product_type,
@@ -1134,32 +1842,34 @@ async def chat(request: ChatRequest):
                 price_sensitive=session["price_sensitive"],
                 recipient_context=session["recipient_context"]
             )
-            print(f"Product info for recommendation: {product_info[:500]}... (truncated)")
             print(f"Recommended products: {recommended_products}")
 
             session["last_product_info"] = product_info
             session["recommended_products"] = recommended_products
 
+            # Handle product_info being None
+            product_info_str = product_info if isinstance(product_info, str) else "Products retrieved successfully."
+            print(f"Product info for recommendation: {product_info_str[:500]}... (truncated)")
+
             prompt = (
                 f"User query: {session['user_responses'][0]}\n\n"
                 f"Detected category: {session['category'] or 'None'}\n\n"
                 f"Suggested categories: {', '.join(session['suggested_categories']) or 'None'}\n\n"
-                f"Detected product type: {session.get('product_type', 'None')}\n\n"
-                f"Detected theme: {session.get('theme', 'None')}\n\n"
+                f"Detected product type: {product_type or 'None'}\n\n"
+                f"Detected theme: {theme or 'None'}\n\n"
                 f"Recipient context: {json.dumps(session['recipient_context'])}\n\n"
                 f"Conversation history:\n{conversation_history}\n\n"
                 f"Current user response: {request.message}\n\n"
                 f"Product metadata:\n{metadata}\n\n"
-                f"Product data:\n{product_info}\n\n"
-                f"You are a shopping assistant for Zwende. Recommend up to {TOP_K} unique products matching the user's preferences, and "
-                f"including the specified product type ({product_type or 'any'}) and theme ({theme or 'any'}). only suggest from the available products and category"
+                f"Product data:\n{product_info_str}\n\n"
+                f"You are a shopping assistant for Zwende. Recommend up to {TOP_K} unique products matching the user's preferences, "
+                f"including the specified product type ({product_type or 'any'}) and theme ({theme or 'any'}). "
                 f"{'Prioritize affordable options.' if session['price_sensitive'] else 'Select top-selling products.'} "
                 f"Consider the recipient context (gender: {session['recipient_context'].get('gender')}, "
                 f"relation: {session['recipient_context'].get('relation')}, occasion: {session['recipient_context'].get('occasion')}). "
                 f"For male recipients, avoid female-oriented products like jewelry unless requested. "
                 f"For anniversaries, prioritize couple-oriented items like home decor or personalized gifts. "
-                f"List each product with title, price, URL, description, vendor, tags, and image URL. "
-                f"If insufficient details are provided, generate a follow-up question about specific attributes (e.g., size, color) instead of recommendations."
+                f"Return a text response with a list of recommended products, each including title, price, URL, a brief description, vendor, tags, and image URL."
             )
             print(f"Prompt for recommendation: {prompt}")
 
@@ -1175,10 +1885,30 @@ async def chat(request: ChatRequest):
             session["stage"] = "post_recommendation"
             session["questions_asked"].append("Recommendation provided")
             print(f"Updated session: {session}")
-            
-            end_time = time.time()
-            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-            return {"response": agent_response}
+
+            # Check if in hardcoded flow
+            hardcoded_categories = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs"]
+            if session["category"] in hardcoded_categories:
+                print(f"Returning structured JSON for hardcoded flow: {session['category']}")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": agent_response,
+                    "type": "interactive_prod",
+                    "products": recommended_products,
+                    "metadata": {
+                        "total_products": total_products
+                    }
+                }
+            else:
+                print(f"Returning raw LLM response for non-hardcoded flow: {session['category']}")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": agent_response,
+                    "type": "text"
+                }
+
 
     elif session["stage"] == "post_recommendation":
         print("Processing post_recommendation stage")
@@ -1202,7 +1932,7 @@ async def chat(request: ChatRequest):
         print(f"Conversation history: {conversation_history}, product_info: {product_info[:500]}... (truncated)")
 
         if product_type and theme and len(session["user_responses"]) >= 2:
-            product_info, recommended_products = fetch_product_data(
+            product_info, recommended_products, total_products = fetch_product_data(
                 category=session["category"],
                 suggested_categories=session["suggested_categories"],
                 product_type=product_type,
@@ -1235,7 +1965,6 @@ async def chat(request: ChatRequest):
                 f"For male recipients, avoid female-oriented products like jewelry unless requested. "
                 f"For anniversaries, prioritize couple-oriented items like home decor or personalized gifts. "
                 f"List each product with title, price, URL, description, vendor, tags, and image URL."
-                f"Ensure both the product URL and image URL are included for each product. "
             )
             print(f"Prompt for post_recommendation (with product_type and theme): {prompt}")
         else:
@@ -1272,6 +2001,32 @@ async def chat(request: ChatRequest):
             updated_category = agent_response.get("category", session["category"] or "None")
             theme = agent_response.get("theme", session.get("theme"))
 
+            # Check for hardcoded category flows
+            if updated_category == "Name Plates":
+                session["category"] = updated_category
+                session["flow_state"] = "nameplate_selection"
+                session["questions_asked"].append(NAMEPLATES_MESSAGE["response"])
+                print(f"Name Plates category detected in post_recommendation, moving to nameplate_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAMEPLATES_MESSAGE
+            elif updated_category == "Dolls, Playsets & Toy Figures":
+                session["category"] = updated_category
+                session["flow_state"] = "name_hanging_selection"
+                session["questions_asked"].append(NAME_HANGINGS_MESSAGE["response"])
+                print(f"Name Hangings for Kids category detected in post_recommendation, moving to name_hanging_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAME_HANGINGS_MESSAGE
+            elif updated_category == "Mugs":
+                session["category"] = updated_category
+                session["flow_state"] = "mug_selection"
+                session["questions_asked"].append(MUGS_MESSAGE["response"])
+                print(f"Terracotta Mugs & Cups category detected in post_recommendation, moving to mug_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return MUGS_MESSAGE
+
             if updated_category != "None" and updated_category in categories:
                 session["category"] = updated_category
                 session["suggested_categories"] = []
@@ -1282,11 +2037,18 @@ async def chat(request: ChatRequest):
             
             end_time = time.time()
             print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-            return {"response": follow_up_question}
+            return {"response": follow_up_question, "type": "text"}
 
         end_time = time.time()
         print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-        return {"response": agent_response}
+        return {
+            "response": agent_response,
+            "type": "interactive_prod",
+            "products": session["recommended_products"],
+            "metadata": {
+                "total_products": len(session["recommended_products"])
+            }
+        }
     
 @app.get("/health", tags=["System"])
 def health_check():
