@@ -2151,4 +2151,4 @@ async def chat(request: ChatRequest):
 # Health Check
 @app.get("/health", tags=["System"])
 def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy"}  
