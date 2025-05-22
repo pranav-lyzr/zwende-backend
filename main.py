@@ -687,8 +687,8 @@ def is_query_vague(message: str, categories: List[str], session: dict, headers: 
     print(f"Checking if query is vague: message={message}, categories={categories}, session={session}")
     message_lower = message.lower().strip()
     
-    product_types = ["nameplate", "mug", "wallet", "decor", "case", "gift", "toy", "rattle", "soft toy", "stacking toy"]
-    theme_keywords = ['ganesha', 'religious', 'floral', 'modern', "traditional", "sensory", "musical"]
+    product_types = []
+    theme_keywords = []
     
     greetings = ['hi', 'hey', 'hello']
     if message_lower in greetings:
@@ -978,10 +978,10 @@ def fetch_product_data(
                             print(f"Mug title_not_contains parameter: title_not_contains_{i} = {params[f'title_not_contains_{i}']}")
             # Handle generic category or suggested categories
             elif category:
-                query += ' AND LOWER(p."Category: Name") = LOWER(%(category)s)'
+                query += ' AND LOWER(p."Type") = LOWER(%(category)s)'
                 params['category'] = category
             elif suggested_categories:
-                query += ' AND LOWER(p."Category: Name") = ANY(%(categories)s)'
+                query += ' AND LOWER(p."Type") = LOWER(%(category)s)'
                 params['categories'] = [c.lower() for c in suggested_categories]
 
             # Additional filters
@@ -1204,16 +1204,16 @@ async def chat(request: ChatRequest):
             f"Consider the recipient context (gender: {recipient_context.get('gender')}, relation: {recipient_context.get('relation')}, "
             f"occasion: {recipient_context.get('occasion')}) to prioritize appropriate categories and tailor the response. "
             f"For example:\n"
-            f"- If the query mentions 'gift for mother', prioritize categories like 'Jewelry Sets', 'Earrings', or 'Personalized Gifts' and ask, "
-            f"'Are you looking for a beautiful piece of jewelry or perhaps a personalized gift for your mother?'.\n"
+            f"- If the query mentions 'gift for brother', prioritize categories like 'Wallets & Money Clips', 'Personalized Gifts', or 'Drinkware' and ask, "
+            f"'Are you looking for a stylish wallet, a personalized gift, or perhaps some unique drinkware for your brother?'.\n"
             f"- If the query mentions 'birthday gift for child', prioritize 'Dolls, Playsets & Toy Figures' or 'Personalized Gifts' and ask, "
             f"'Would you like to explore fun toys or personalized gifts for the child's birthday?'.\n"
             f"- If the query mentions 'marriage anniversary', prioritize couple-oriented categories and ask, "
             f"'Are you looking for a romantic gift for your anniversary, like personalized decor or couple mugs?'.\n"
             f"- If the query mentions 'art and craft', prioritize 'Arts & Crafts' or 'Art & Craft Kits' and ask, "
             f"'Do you want to dive into creative art and craft kits or explore handcrafted art pieces?'.\n"
-            f"- If the query is vague (e.g., 'gift ideas'), suggest a broad range of categories like 'Gift Giving', 'Decor', 'Mugs' and ask, "
-            f"'I’d love to help you find the perfect gift! Are you thinking of something like home decor, personalized items, or maybe a unique mug?'.\n"
+            f"- If the query is vague (e.g., 'gift ideas'), suggest a broad range of categories like 'Gift Giving', 'Decor', 'Drinkware' and ask, "
+            f"'I’d love to help you find the perfect gift! Are you thinking of something like home decor, personalized items, or maybe unique drinkware?'.\n"
             f"Avoid generic phrases like 'It looks like you're looking for something special' or 'I'm not sure exactly what you're looking for'. "
             f"Instead, craft a response that feels personalized and directly relates to the user's query or context. "
             f"Return a JSON object with three keys:\n"
@@ -1247,7 +1247,7 @@ async def chat(request: ChatRequest):
             # Fallback if response is not a dict
             print(f"Invalid LLM response: {agent_response}. Using fallback.")
             fallback_response = (
-                f"I’d love to help you find the perfect item! Are you thinking of something like "
+                f"I’d love to help you find the perfect gift! Are you thinking of something like "
                 f"{', '.join(filtered_categories[:5])}? Please choose one or tell me more!"
             )
             return None, filtered_categories[:5], fallback_response
@@ -1255,14 +1255,14 @@ async def chat(request: ChatRequest):
         except Exception as e:
             print(f"Error in LLM category suggestion: {str(e)}. Using fallback categories.")
             fallback_response = (
-                f"I’d love to help you find the perfect item! Are you thinking of something like "
+                f"I’d love to help you find the perfect gift! Are you thinking of something like "
                 f"{', '.join(filtered_categories[:5])}? Please choose one or tell me more!"
             )
             return None, filtered_categories[:5], fallback_response
 
     # Handle flow states
     if session["flow_state"] == "initial":
-        # Check for category match before greeting detection
+        # Check for category match and intent
         message_lower = message_lower.strip()
         matched_category = None
         for cat in categories:
@@ -1274,84 +1274,214 @@ async def chat(request: ChatRequest):
             if score > 80:
                 matched_category = best_match
 
-        # If intent is category_change or a category is matched, proceed to subcategory_selection
-        if session["intent"] == "category_change" and matched_category:
-            session["category"] = matched_category
-            session["flow_state"] = "subcategory_selection"
-            session["stage"] = "subcategory_selection"
-            print(f"Category {matched_category} detected in initial message, moving to subcategory_selection")
-
-            tags = get_distinct_tags(matched_category)
-            session["subcategory_tags"] = tags
-            if not tags:
-                print(f"No tags found for category {matched_category}, proceeding to recommendation")
-                session["flow_state"] = "recommendation"
-                session["stage"] = "recommendation"
-                error_message, recommended_products, total_products = fetch_product_data(
-                    category=session["category"],
-                    price_sensitive=session["price_sensitive"],
-                    recipient_context=session["recipient_context"],
-                    subcategory_tags=[f"category:{matched_category.lower()}"]
-                )
-                session["last_product_info"] = error_message
-                session["recommended_products"] = recommended_products
-                session["questions_asked"].append("Recommendation provided")
-
-                response = {
-                    "response": f"Here are the top products in {matched_category}:\n{error_message or 'Products retrieved successfully.'}",
-                    "type": "interactive_prod",
-                    "products": recommended_products,
-                    "metadata": {
-                        "total_products": total_products
+        # If intent is product_request or category_change, prioritize category detection
+        if session["intent"] in ["product_request", "category_change"]:
+            is_vague, specific_item, context = is_query_vague(request.message, categories, session, headers)
+            if not is_vague and specific_item:
+                print(f"Specific item detected: {specific_item}")
+                product = fetch_specific_product(specific_item, session["product_type"], session["theme"])
+                if product:
+                    response = {
+                        "response": f"Found product: {product['Title']}",
+                        "type": "interactive_prod",
+                        "products": [{
+                            "product name": product["Title"],
+                            "description": strip_html(product.get("Product Description", "")),
+                            "price": float(product.get("Variant Price", 0)),
+                            "Link to product": product.get("URL", "https://example.com"),
+                            "Image URL": product.get("Image Src", "https://example.com/default-image.jpg")
+                        }],
+                        "metadata": {
+                            "total_products": 1
+                        }
                     }
+                    session["recommended_products"] = response["products"]
+                    session["questions_asked"].append(response["response"])
+                    print(f"Generated response for specific product: {response['response']}")
+                    end_time = time.time()
+                    print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                    return response
+
+            # If a category is matched or intent is category_change, proceed to subcategory_selection
+            if matched_category or session["intent"] == "category_change":
+                session["category"] = matched_category or session["category"]
+                if not session["category"]:
+                    print("No category identified, defaulting to Gift Giving")
+                    session["category"] = "Gift Giving"
+                session["flow_state"] = "subcategory_selection"
+                session["stage"] = "subcategory_selection"
+                print(f"Category {session['category']} detected, moving to subcategory_selection")
+
+                tags = get_distinct_tags(session["category"])
+                session["subcategory_tags"] = tags
+                if not tags:
+                    print(f"No tags found for category {session['category']}, proceeding to recommendation")
+                    session["flow_state"] = "recommendation"
+                    session["stage"] = "recommendation"
+                    error_message, recommended_products, total_products = fetch_product_data(
+                        category=session["category"],
+                        price_sensitive=session["price_sensitive"],
+                        recipient_context=session["recipient_context"],
+                        subcategory_tags=[f"category:{session['category'].lower()}"]
+                    )
+                    session["last_product_info"] = error_message
+                    session["recommended_products"] = recommended_products
+                    session["questions_asked"].append("Recommendation provided")
+
+                    response = {
+                        "response": f"Here are the top products in {session['category']}:\n{error_message or 'Products retrieved successfully.'}",
+                        "type": "interactive_prod",
+                        "products": recommended_products,
+                        "metadata": {
+                            "total_products": total_products
+                        }
+                    }
+                    print(f"Generated response: {response['response'][:500]}... (truncated)")
+                    end_time = time.time()
+                    print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                    return response
+
+                prompt = (
+                    f"Category: {session['category']}\n\n"
+                    f"Available tags (subcategories): {', '.join(tags)}\n\n"
+                    f"You are a shopping assistant for Zwende. Generate a user-friendly follow-up question to help the user narrow down their preferences within the {session['category']} category. "
+                    f"Focus on the theme (e.g., contemporary, traditional, minimalist) and type (e.g., specific product types relevant to the category) based on the provided tags. "
+                    f"Create a clear, engaging, and concise question suitable for a UI, presenting the available tags as polished options without prefixes like 'type of:', 'style:', or 'category:'. "
+                    f"For each option, include a brief, appealing description in parentheses to enhance user understanding (e.g., for Drinkware: 'Personalized (custom names or photos)', for Earrings: 'Danglers (vibrant, hanging designs)'). "
+                    f"Ensure the question encourages the user to select a specific style or type, avoiding technical tag formats in the displayed text. "
+                    f"Example format for a generic category:\n"
+                    f"Which type of {session['category']} would you like to explore? 🎨✨\n"
+                    f"- Option 1 (description of style or type)\n"
+                    f"- Option 2 (description of style or type)\n"
+                    f"- Option 3 (description of style or type)\n"
+                    f"Return a JSON object with two keys:\n"
+                    f"- 'response': The follow-up question with formatted options as shown above.\n"
+                    f"- 'options': The list of original tag names (e.g., 'type of earring:danglers', 'style:contemporary') for backend use."
+                )
+                payload = {
+                    "user_id": LYZR_USER_ID,
+                    "agent_id": LYZR_AGENT_ID,
+                    "session_id": request.session_id,
+                    "message": prompt
                 }
-                print(f"Generated response: {response['response'][:500]}... (truncated)")
+                agent_response = call_lyzr_api(payload, headers) or {
+                    "response": f"Which type of {session['category']} would you like to explore? 🎨✨\n" + "\n".join([f"- {tag.split(':')[-1].title()} (unique, handcrafted design)" for tag in tags[:4]]),
+                    # "options": tags[:4]
+                }
+                print(f"Agent response for subcategory question: {agent_response}")
+
+                session["questions_asked"].append(agent_response["response"])
                 end_time = time.time()
                 print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-                return response
+                return {
+                    "response": agent_response["response"],
+                    "type": "text",
+                    # "options": agent_response["options"]
+                }
 
-            prompt = (
-                f"Category: {session['category']}\n\n"
-                f"Available tags (subcategories): {', '.join(tags)}\n\n"
-                f"You are a shopping assistant for Zwende. Generate a user-friendly follow-up question to help the user narrow down their preferences within the {session['category']} category. "
-                f"Focus on the theme (e.g., contemporary, traditional, minimalist) and type (e.g., specific product types relevant to the category) based on the provided tags. "
-                f"Create a clear, engaging, and concise question suitable for a UI, presenting the available tags as polished options without prefixes like 'type of:', 'style:', or 'category:'. "
-                f"For each option, include a brief, appealing description in parentheses to enhance user understanding (e.g., for Mugs: 'Personalized (custom names or photos)', for Earrings: 'Danglers (vibrant, hanging designs)'). "
-                f"Ensure the question encourages the user to select a specific style or type, avoiding technical tag formats in the displayed text. "
-                f"Example format for a generic category:\n"
-                f"Which type of {session['category']} would you like to explore? 🎨✨\n"
-                f"- Option 1 (description of style or type)\n"
-                f"- Option 2 (description of style or type)\n"
-                f"- Option 3 (description of style or type)\n"
-                f"Return a JSON object with two keys:\n"
-                f"- 'response': The follow-up question with formatted options as shown above.\n"
-                f"- 'options': The list of original tag names (e.g., 'type of earring:danglers', 'style:contemporary') for backend use."
+            # If no category is matched, use LLM to suggest categories
+            selected_category, suggested_categories, llm_response = suggest_categories_llm(
+                query=request.message,
+                context=session.get("context", "unknown"),
+                categories=categories,
+                headers=headers,
+                recipient_context=session["recipient_context"],
+                session_id=request.session_id
             )
-            payload = {
-                "user_id": LYZR_USER_ID,
-                "agent_id": LYZR_AGENT_ID,
-                "session_id": request.session_id,
-                "message": prompt
-            }
-            agent_response = call_lyzr_api(payload, headers) or {
-                "response": f"Which type of {session['category']} would you like to explore? 🎨✨\n" + "\n".join([f"- {tag.split(':')[-1].title()} (unique, handcrafted design)" for tag in tags]),
-                "options": tags
-            }
-            print(f"Agent response for subcategory question: {agent_response}")
+            session["suggested_categories"] = suggested_categories
+            session["stage"] = "follow_up"
+            session["flow_state"] = "awaiting_category"
 
-            session["questions_asked"].append(agent_response["response"])
+            if selected_category:
+                session["category"] = selected_category
+                session["flow_state"] = "subcategory_selection"
+                session["stage"] = "subcategory_selection"
+                print(f"LLM identified category: {selected_category}, moving to subcategory_selection")
+
+                tags = get_distinct_tags(selected_category)
+                session["subcategory_tags"] = tags
+                if not tags:
+                    print(f"No tags found for category {selected_category}, proceeding to recommendation")
+                    session["flow_state"] = "recommendation"
+                    session["stage"] = "recommendation"
+                    error_message, recommended_products, total_products = fetch_product_data(
+                        category=session["category"],
+                        price_sensitive=session["price_sensitive"],
+                        recipient_context=session["recipient_context"],
+                        subcategory_tags=[f"category:{selected_category.lower()}"]
+                    )
+                    session["last_product_info"] = error_message
+                    session["recommended_products"] = recommended_products
+                    session["questions_asked"].append("Recommendation provided")
+
+                    response = {
+                        "response": f"Here are the top products in {selected_category}:\n{error_message or 'Products retrieved successfully.'}",
+                        "type": "interactive_prod",
+                        "products": recommended_products,
+                        "metadata": {
+                            "total_products": total_products
+                        }
+                    }
+                    print(f"Generated response: {response['response'][:500]}... (truncated)")
+                    end_time = time.time()
+                    print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                    return response
+
+                prompt = (
+                    f"Category: {session['category']}\n\n"
+                    f"Available tags (subcategories): {', '.join(tags)}\n\n"
+                    f"You are a shopping assistant for Zwende. Generate a user-friendly follow-up question to help the user narrow down their preferences within the {session['category']} category. "
+                    f"Focus on the theme (e.g., contemporary, traditional, minimalist) and type (e.g., specific product types relevant to the category) based on the provided tags. "
+                    f"Create a clear, engaging, and concise question suitable for a UI, presenting the available tags as polished options without prefixes like 'type of:', 'style:', or 'category:'. "
+                    f"For each option, include a brief, appealing description in parentheses to enhance user understanding (e.g., for Drinkware: 'Personalized (custom names or photos)', for Earrings: 'Danglers (vibrant, hanging designs)'). "
+                    f"Ensure the question encourages the user to select a specific style or type, avoiding technical tag formats in the displayed text. "
+                    f"Example format for a generic category:\n"
+                    f"Which type of {session['category']} would you like to explore? 🎨✨\n"
+                    f"- Option 1 (description of style or type)\n"
+                    f"- Option 2 (description of style or type)\n"
+                    f"- Option 3 (description of style or type)\n"
+                    f"Return a JSON object with two keys:\n"
+                    f"- 'response': The follow-up question with formatted options as shown above.\n"
+                    f"- 'options': The list of original tag names (e.g., 'type of earring:danglers', 'style:contemporary') for backend use."
+                )
+                payload = {
+                    "user_id": LYZR_USER_ID,
+                    "agent_id": LYZR_AGENT_ID,
+                    "session_id": request.session_id,
+                    "message": prompt
+                }
+                agent_response = call_lyzr_api(payload, headers) or {
+                    "response": f"Which type of {session['category']} would you like to explore? 🎨✨\n" + "\n".join([f"- {tag.split(':')[-1].title()} (unique, handcrafted design)" for tag in tags[:4]]),
+                    # "options": tags[:4]
+                }
+                print(f"Agent response for subcategory question: {agent_response}")
+
+                session["questions_asked"].append(agent_response["response"])
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": agent_response["response"],
+                    "type": "text",
+                    # "options": agent_response["options"]
+                }
+
+            # If no specific category, return LLM-generated response
+            response = {
+                "response": llm_response or (
+                    f"I’d love to help you find the perfect gift! Are you thinking of something like "
+                    f"{', '.join(suggested_categories)}? Please choose one or tell me more!"
+                ),
+                "type": "text",
+                # "options": suggested_categories
+            }
+            session["questions_asked"].append(response["response"])
             end_time = time.time()
             print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-            return {
-                "response": agent_response["response"],
-                "type": "text",
-                # "options": agent_response["options"]
-            }
+            return response
 
-        # Fallback to greeting detection if no category_change intent
+        # Fallback to greeting detection only if intent is explicitly greeting and no category is matched
         greetings = ['hi', 'hey', 'heyy', 'heyyy', 'hello', 'hola']
-        if any(message_lower.startswith(g) for g in greetings) and not specific_product:
-            session["intent"] = "greeting"
+        if session["intent"] == "greeting" and any(message_lower.startswith(g) for g in greetings) and not specific_product and not matched_category:
             session["category"] = None
             session["context"] = "greeting"
             session["suggested_categories"] = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs", "Gift Giving"]
@@ -1365,6 +1495,7 @@ async def chat(request: ChatRequest):
             return WELCOME_MESSAGE
 
     elif session["flow_state"] == "awaiting_category":
+        # Map user input to categories, including suggested categories from previous response
         category_map = {
             "1": "Name Plates",
             "nameplates for home": "Name Plates",
@@ -1378,6 +1509,11 @@ async def chat(request: ChatRequest):
             "5": "Others",
             "others": "Others"
         }
+        # Add suggested categories from session to category_map
+        for idx, cat in enumerate(session.get("suggested_categories", []), 1):
+            category_map[str(idx)] = cat
+            category_map[cat.lower()] = cat
+
         selected_category = None
         for key, value in category_map.items():
             if message_lower == key or key in message_lower:
@@ -1423,110 +1559,182 @@ async def chat(request: ChatRequest):
                     "type": "text"
                 }
             else:
-                # Handle "Others" with LLM-based category suggestion
-                session["category"] = None
-                session["flow_state"] = "clarify_others"
-                session["stage"] = "clarify_others"
-                print(f"Category 'Others' selected, moving to clarify_others")
+                # Handle other categories (e.g., Drinkware, Wallets & Money Clips)
+                session["category"] = selected_category
+                session["flow_state"] = "subcategory_selection"
+                session["stage"] = "subcategory_selection"
+                print(f"Category {selected_category} selected, moving to subcategory_selection")
 
-                # Use LLM to suggest categories
-                selected_category, suggested_categories, llm_response = suggest_categories_llm(
-                    query=request.message,
-                    context=session.get("context", "unknown"),
-                    categories=categories,
-                    headers=headers,
-                    recipient_context=session["recipient_context"],
-                    session_id=request.session_id
-                )
-                session["suggested_categories"] = suggested_categories
-
-                if selected_category:
-                    session["category"] = selected_category
-                    session["flow_state"] = "subcategory_selection"
-                    session["stage"] = "subcategory_selection"
-                    print(f"LLM identified category: {selected_category}, moving to subcategory_selection")
-
-                    tags = get_distinct_tags(selected_category)
-                    session["subcategory_tags"] = tags
-                    if not tags:
-                        print(f"No tags found for category {selected_category}, proceeding to recommendation")
-                        session["flow_state"] = "recommendation"
-                        session["stage"] = "recommendation"
-                        error_message, recommended_products, total_products = fetch_product_data(
-                            category=session["category"],
-                            price_sensitive=session["price_sensitive"],
-                            recipient_context=session["recipient_context"],
-                            subcategory_tags=[f"category:{selected_category.lower()}"]
-                        )
-                        session["last_product_info"] = error_message
-                        session["recommended_products"] = recommended_products
-                        session["questions_asked"].append("Recommendation provided")
-
-                        response = {
-                            "response": f"Here are the top products in {selected_category}:\n{error_message or 'Products retrieved successfully.'}",
-                            "type": "interactive_prod",
-                            "products": recommended_products,
-                            "metadata": {
-                                "total_products": total_products
-                            }
-                        }
-                        print(f"Generated response: {response['response'][:500]}... (truncated)")
-                        end_time = time.time()
-                        print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-                        return response
-
-                    prompt = (
-                        f"Category: {session['category']}\n\n"
-                        f"Available tags (subcategories): {', '.join(tags)}\n\n"
-                        f"You are a shopping assistant for Zwende. Generate a user-friendly follow-up question to help the user narrow down their preferences within the {session['category']} category. "
-                        f"Focus on the theme (e.g., contemporary, traditional, minimalist) and type (e.g., specific product types relevant to the category) based on the provided tags. "
-                        f"Create a clear, engaging, and concise question suitable for a UI, presenting the available tags as polished options without prefixes like 'type of:', 'style:', or 'category:'. "
-                        f"For each option, include a brief, appealing description in parentheses to enhance user understanding (e.g., for Mugs: 'Personalized (custom names or photos)', for Earrings: 'Danglers (vibrant, hanging designs)'). "
-                        f"Ensure the question encourages the user to select a specific style or type, avoiding technical tag formats in the displayed text. "
-                        f"Example format for a generic category:\n"
-                        f"Which type of {session['category']} would you like to explore? 🎨✨\n"
-                        f"- Option 1 (description of style or type)\n"
-                        f"- Option 2 (description of style or type)\n"
-                        f"- Option 3 (description of style or type)\n"
-                        f"Return a JSON object with two keys:\n"
-                        f"- 'response': The follow-up question with formatted options as shown above.\n"
-                        f"- 'options': The list of original tag names (e.g., 'type of earring:danglers', 'style:contemporary') for backend use."
+                tags = get_distinct_tags(selected_category)
+                session["subcategory_tags"] = tags
+                if not tags:
+                    print(f"No tags found for category {selected_category}, proceeding to recommendation")
+                    session["flow_state"] = "recommendation"
+                    session["stage"] = "recommendation"
+                    error_message, recommended_products, total_products = fetch_product_data(
+                        category=session["category"],
+                        price_sensitive=session["price_sensitive"],
+                        recipient_context=session["recipient_context"],
+                        subcategory_tags=[f"category:{selected_category.lower()}"]
                     )
-                    payload = {
-                        "user_id": LYZR_USER_ID,
-                        "agent_id": LYZR_AGENT_ID,
-                        "session_id": request.session_id,
-                        "message": prompt
-                    }
-                    agent_response = call_lyzr_api(payload, headers) or {
-                        "response": f"Which type of {session['category']} would you like to explore? 🎨✨\n" + "\n".join([f"- {tag.split(':')[-1].title()} (unique, handcrafted design)" for tag in tags]),
-                        "options": tags
-                    }
-                    print(f"Agent response for subcategory question: {agent_response}")
+                    session["last_product_info"] = error_message
+                    session["recommended_products"] = recommended_products
+                    session["questions_asked"].append("Recommendation provided")
 
-                    session["questions_asked"].append(agent_response["response"])
+                    response = {
+                        "response": f"Here are the top products in {selected_category}:\n{error_message or 'Products retrieved successfully.'}",
+                        "type": "interactive_prod",
+                        "products": recommended_products,
+                        "metadata": {
+                            "total_products": total_products
+                        }
+                    }
+                    print(f"Generated response: {response['response'][:500]}... (truncated)")
                     end_time = time.time()
                     print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-                    return {
-                        "response": agent_response["response"],
-                        "type": "text",
-                        # "options": agent_response["options"]
-                    }
+                    return response
 
-                # If no specific category is identified, ask for clarification with suggested categories
-                response = {
-                    "response": (
-                        f"{llm_response}" +
-                        "\n".join([f"- {cat}" for cat in suggested_categories]) +
-                        "\nPlease choose one or tell me more about what you're looking for!"
-                    ),
-                    "type": "text",
-                    "options": suggested_categories
+                prompt = (
+                    f"Category: {session['category']}\n\n"
+                    f"Available tags (subcategories): {', '.join(tags)}\n\n"
+                    f"You are a shopping assistant for Zwende. Generate a user-friendly follow-up question to help the user narrow down their preferences within the {session['category']} category. "
+                    f"Focus on the theme (e.g., contemporary, traditional, minimalist) and type (e.g., specific product types relevant to the category) based on the provided tags. "
+                    f"Create a clear, engaging, and concise question suitable for a UI, presenting the available tags as polished options without prefixes like 'type of:', 'style:', or 'category:'. "
+                    f"For each option, include a brief, appealing description in parentheses to enhance user understanding (e.g., for Drinkware: 'Personalized (custom names or photos)', for Earrings: 'Danglers (vibrant, hanging designs)'). "
+                    f"Ensure the question encourages the user to select a specific style or type, avoiding technical tag formats in the displayed text. "
+                    f"Example format for a generic category:\n"
+                    f"Which type of {session['category']} would you like to explore? 🎨✨\n"
+                    f"- Option 1 (description of style or type)\n"
+                    f"- Option 2 (description of style or type)\n"
+                    f"- Option 3 (description of style or type)\n"
+                    f"Return a JSON object with two keys:\n"
+                    f"- 'response': The follow-up question with formatted options as shown above.\n"
+                    f"- 'options': The list of original tag names (e.g., 'type of earring:danglers', 'style:contemporary') for backend use."
+                )
+                payload = {
+                    "user_id": LYZR_USER_ID,
+                    "agent_id": LYZR_AGENT_ID,
+                    "session_id": request.session_id,
+                    "message": prompt
                 }
-                session["questions_asked"].append(response["response"])
+                agent_response = call_lyzr_api(payload, headers) or {
+                    "response": f"Which type of {session['category']} would you like to explore? 🎨✨\n" + "\n".join([f"- {tag.split(':')[-1].title()} (unique, handcrafted design)" for tag in tags[:4]]),
+                    # "options": tags[:4]
+                }
+                print(f"Agent response for subcategory question: {agent_response}")
+
+                session["questions_asked"].append(agent_response["response"])
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return {
+                    "response": agent_response["response"],
+                    "type": "text",
+                    # "options": agent_response["options"]
+                }
+
+        # Handle "Others" or vague input with LLM-based category suggestion
+        session["category"] = None
+        session["flow_state"] = "clarify_others"
+        session["stage"] = "clarify_others"
+        print(f"Category 'Others' or vague input selected, moving to clarify_others")
+
+        selected_category, suggested_categories, llm_response = suggest_categories_llm(
+            query=request.message,
+            context=session.get("context", "unknown"),
+            categories=categories,
+            headers=headers,
+            recipient_context=session["recipient_context"],
+            session_id=request.session_id
+        )
+        session["suggested_categories"] = suggested_categories
+
+        if selected_category:
+            session["category"] = selected_category
+            session["flow_state"] = "subcategory_selection"
+            session["stage"] = "subcategory_selection"
+            print(f"LLM identified category: {selected_category}, moving to subcategory_selection")
+
+            tags = get_distinct_tags(selected_category)
+            session["subcategory_tags"] = tags
+            if not tags:
+                print(f"No tags found for category {selected_category}, proceeding to recommendation")
+                session["flow_state"] = "recommendation"
+                session["stage"] = "recommendation"
+                error_message, recommended_products, total_products = fetch_product_data(
+                    category=session["category"],
+                    price_sensitive=session["price_sensitive"],
+                    recipient_context=session["recipient_context"],
+                    subcategory_tags=[f"category:{selected_category.lower()}"]
+                )
+                session["last_product_info"] = error_message
+                session["recommended_products"] = recommended_products
+                session["questions_asked"].append("Recommendation provided")
+
+                response = {
+                    "response": f"Here are the top products in {selected_category}:\n{error_message or 'Products retrieved successfully.'}",
+                    "type": "interactive_prod",
+                    "products": recommended_products,
+                    "metadata": {
+                        "total_products": total_products
+                    }
+                }
+                print(f"Generated response: {response['response'][:500]}... (truncated)")
                 end_time = time.time()
                 print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
                 return response
+
+            prompt = (
+                f"Category: {session['category']}\n\n"
+                f"Available tags (subcategories): {', '.join(tags)}\n\n"
+                f"You are a shopping assistant for Zwende. Generate a user-friendly follow-up question to help the user narrow down their preferences within the {session['category']} category. "
+                f"Focus on the theme (e.g., contemporary, traditional, minimalist) and type (e.g., specific product types relevant to the category) based on the provided tags. "
+                f"Create a clear, engaging, and concise question suitable for a UI, presenting the available tags as polished options without prefixes like 'type of:', 'style:', or 'category:'. "
+                f"For each option, include a brief, appealing description in parentheses to enhance user understanding (e.g., for Drinkware: 'Personalized (custom names or photos)', for Earrings: 'Danglers (vibrant, hanging designs)'). "
+                f"Ensure the question encourages the user to select a specific style or type, avoiding technical tag formats in the displayed text. "
+                f"Example format for a generic category:\n"
+                f"Which type of {session['category']} would you like to explore? 🎨✨\n"
+                f"- Option 1 (description of style or type)\n"
+                f"- Option 2 (description of style or type)\n"
+                f"- Option 3 (description of style or type)\n"
+                f"Return a JSON object with two keys:\n"
+                f"- 'response': The follow-up question with formatted options as shown above.\n"
+                f"- 'options': The list of original tag names (e.g., 'type of earring:danglers', 'style:contemporary') for backend use."
+            )
+            payload = {
+                "user_id": LYZR_USER_ID,
+                "agent_id": LYZR_AGENT_ID,
+                "session_id": request.session_id,
+                "message": prompt
+            }
+            agent_response = call_lyzr_api(payload, headers) or {
+                "response": f"Which type of {session['category']} would you like to explore? 🎨✨\n" + "\n".join([f"- {tag.split(':')[-1].title()} (unique, handcrafted design)" for tag in tags[:4]]),
+                # "options": tags[:4]
+            }
+            print(f"Agent response for subcategory question: {agent_response}")
+
+            session["questions_asked"].append(agent_response["response"])
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return {
+                "response": agent_response["response"],
+                "type": "text",
+                # "options": agent_response["options"]
+            }
+
+        # If no specific category is identified, ask for clarification with suggested categories
+        response = {
+            "response": (
+                f"{llm_response}" +
+                "\n".join([f"- {cat}" for cat in suggested_categories]) +
+                "\nPlease choose one or tell me more about what you're looking for!"
+            ),
+            "type": "text",
+            # "options": suggested_categories
+        }
+        session["questions_asked"].append(response["response"])
+        end_time = time.time()
+        print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+        return response
 
     elif session["flow_state"] == "clarify_others":
         # Use LLM to suggest categories and generate a follow-up question
