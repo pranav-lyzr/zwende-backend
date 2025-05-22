@@ -2146,3 +2146,9 @@ async def chat(request: ChatRequest):
         end_time = time.time()
         print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
         return WELCOME_MESSAGE
+
+
+# Health Check
+@app.get("/health", tags=["System"])
+def health_check():
+    return {"status": "healthy"}
