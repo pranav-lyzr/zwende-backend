@@ -978,10 +978,10 @@ def fetch_product_data(
                             print(f"Mug title_not_contains parameter: title_not_contains_{i} = {params[f'title_not_contains_{i}']}")
             # Handle generic category or suggested categories
             elif category:
-                query += ' AND LOWER(p."Type") = LOWER(%(category)s)'
+                query += ' AND LOWER(p."Category: Name") = LOWER(%(category)s)'
                 params['category'] = category
             elif suggested_categories:
-                query += ' AND LOWER(p."Type") = LOWER(%(category)s)'
+                query += ' AND LOWER(p."Category: Name") = LOWER(%(category)s)'
                 params['categories'] = [c.lower() for c in suggested_categories]
 
             # Additional filters
