@@ -1006,7 +1006,7 @@ def fetch_product_data(
                 query += ' AND ('
                 for i, tag in enumerate(tags_to_use):
                     if i > 0:
-                        query += ' OR '
+                        query += ' AND '
                     query += f'LOWER(p."Tags") LIKE %(tag_{i})s'
                     params[f'tag_{i}'] = f'%{tag.lower()}%'
                     print(f"LLM flow tag parameter: tag_{i} = {params[f'tag_{i}']}")
@@ -1062,11 +1062,11 @@ def fetch_product_data(
 
             # Additional filters
             if product_type and not (nameplate_type or name_hanging_type or mug_type):
-                query += ' AND (LOWER(p."Title") LIKE %(product_type)s OR LOWER(p."Tags") LIKE %(product_type)s OR LOWER(p."Product Description") LIKE %(product_type)s)'
+                query += ' AND (LOWER(p."Title") LIKE %(product_type)s AND LOWER(p."Tags") LIKE %(product_type)s AND LOWER(p."Product Description") LIKE %(product_type)s)'
                 params['product_type'] = f'%{product_type.lower()}%'
                 print(f"Product type parameter: product_type = {params['product_type']}")
             if theme:
-                query += ' AND (LOWER(p."Tags") LIKE %(theme)s OR LOWER(p."Title") LIKE %(theme)s OR LOWER(p."Product Description") LIKE %(theme)s)'
+                query += ' AND (LOWER(p."Tags") LIKE %(theme)s AND LOWER(p."Title") LIKE %(theme)s AND LOWER(p."Product Description") LIKE %(theme)s)'
                 params['theme'] = f'%{theme.lower()}%'
                 print(f"Theme parameter: theme = {params['theme']}")
 
