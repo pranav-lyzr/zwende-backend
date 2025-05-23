@@ -517,7 +517,7 @@ def search(source: Literal['orders', 'collections'], category: str):
                 "Category_Name": str(record.get('Category_Name', '')) or None,
                 "collection_title": str(record.get('collection_title', '')) or None,
                 "Variant_Price": float(record.get('Variant_Price', 0.0)),
-                "URL": str(record.get('URL', 'https://example.com')),
+                "URL": str(record.get('URL')),
                 "total_sold": float(record.get('total_sold', 0.0)) if record.get('total_sold') is not None else None,
                 "total_in_collection": int(record.get('total_in_collection', 0)) if record.get('total_in_collection') is not None else None
             }
@@ -682,6 +682,82 @@ def detect_intent(message: str, session: dict, headers: dict) -> str:
     end_time = time.time()
     print(f"[{end_time}] detect_intent completed in {end_time - start_time:.3f} seconds")
     return "product_request"
+
+def detect_category(message: str, headers: dict) -> Optional[str]:
+    start_time = time.time()
+    message_lower = message.lower().strip()
+    print(f"[{start_time}] Detecting category for message: {message_lower}")
+
+    # Define hardcoded categories
+    hardcoded_categories = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs"]
+
+    # Step 1: Try quick keyword matching as a first pass (for efficiency)
+    category_keywords = {
+        "Name Plates": ["name plate", "nameplates", "name-plate", "nameplates for home"],
+        "Name Hanging": ["name hanging", "name hangings", "namehanging", "name hangings for kids", "kids namehanging"],
+        "Mugs": ["mug", "mugs", "cup", "cups", "terracotta mugs & cups"]
+    }
+    
+    for category, keywords in category_keywords.items():
+        if any(keyword in message_lower for keyword in keywords):
+            print(f"[{time.time()}] Keyword match found for category: {category}")
+            end_time = time.time()
+            print(f"[{end_time}] detect_category completed in {end_time - start_time:.3f} seconds")
+            return category
+
+    # Step 2: If no keyword match, use LLM for fuzzy matching
+    prompt = (
+        f"User message: {message}\n\n"
+        f"Available categories: {', '.join(hardcoded_categories)}\n\n"
+        f"You are a shopping assistant for Zwende. Based on the user's message, determine if it refers to one of the following categories: {', '.join(hardcoded_categories)}. "
+        f"Consider possible typos, synonyms, or related terms. For example:\n"
+        f"- 'nameplte' or 'home sign' should map to 'Name Plates'.\n"
+        f"- ''namehanging' should map to 'Dolls, Playsets & Toy Figures'.\n"
+        f"- 'coffee cup' or 'muggs' should map to 'Mugs'.\n"
+        f"If the message clearly refers to one of these categories, return the category name. "
+        f"If the message is vague or refers to something else (e.g., 'wallet', 'greeting'), return null. "
+        f"Return a JSON object with a single key 'category' containing the category name or null."
+    )
+    print(f"[{time.time()}] LLM prompt for category detection: {prompt}")
+
+    payload = {
+        "user_id": LYZR_USER_ID,
+        "agent_id": LYZR_AGENT_ID,
+        "session_id": "category_detection",
+        "message": prompt
+    }
+
+    try:
+        agent_response = call_lyzr_api(payload, headers)
+        print(f"[{time.time()}] LLM response: {agent_response}")
+
+        if isinstance(agent_response, dict) and 'category' in agent_response:
+            category = agent_response['category']
+            if category in hardcoded_categories:
+                print(f"[{time.time()}] LLM detected category: {category}")
+                end_time = time.time()
+                print(f"[{end_time}] detect_category completed in {end_time - start_time:.3f} seconds")
+                return category
+            elif category is None:
+                print(f"[{time.time()}] LLM returned null, no category matched")
+                end_time = time.time()
+                print(f"[{end_time}] detect_category completed in {end_time - start_time:.3f} seconds")
+                return None
+            else:
+                print(f"[{time.time()}] LLM returned invalid category: {category}, falling back to None")
+                end_time = time.time()
+                print(f"[{end_time}] detect_category completed in {end_time - start_time:.3f} seconds")
+                return None
+        else:
+            print(f"[{time.time()}] Invalid LLM response format: {agent_response}, falling back to None")
+            end_time = time.time()
+            print(f"[{end_time}] detect_category completed in {end_time - start_time:.3f} seconds")
+            return None
+    except Exception as e:
+        print(f"[{time.time()}] Error in LLM call: {str(e)}, falling back to None")
+        end_time = time.time()
+        print(f"[{end_time}] detect_category completed in {end_time - start_time:.3f} seconds")
+        return None # No hardcoded category matched
 
 def is_query_vague(message: str, categories: List[str], session: dict, headers: dict) -> Tuple[bool, Optional[str], Optional[str]]:
     print(f"Checking if query is vague: message={message}, categories={categories}, session={session}")
@@ -1064,8 +1140,8 @@ def fetch_product_data(
                     "product name": record.get('Title', 'Unknown Product'),
                     "description": strip_html(record.get('Product Description', '')),
                     "price": float(record.get('variant_price', 0.0)),  # Ensure valid float
-                    "Link to product": record.get('URL', 'https://example.com'),
-                    "Image URL": record.get('Image Src', 'https://example.com/default-image.jpg')
+                    "Link to product": record.get('URL'),
+                    "Image URL": record.get('Image Src')
                 } for record in records[:10]
             ]
             total_products = len(records)
@@ -1262,6 +1338,34 @@ async def chat(request: ChatRequest):
 
     # Handle flow states
     if session["flow_state"] == "initial":
+        # Check for hardcoded category match using keywords
+        identified_category = detect_category(request.message, headers)
+        
+        if identified_category in ["Name Plates", "Name Hanging", "Mugs"]:
+            session["category"] = identified_category
+            if identified_category == "Name Plates":
+                session["flow_state"] = "nameplate_selection"
+                session["questions_asked"].append(NAMEPLATES_MESSAGE["response"])
+                print(f"Category 'Name Plates' detected, moving to nameplate_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAMEPLATES_MESSAGE
+            elif identified_category == "Name Hanging":
+                session["flow_state"] = "name_hanging_selection"
+                session["questions_asked"].append(NAME_HANGINGS_MESSAGE["response"])
+                print(f"Category 'Dolls, Playsets & Toy Figures' detected, moving to name_hanging_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return NAME_HANGINGS_MESSAGE
+            elif identified_category == "Mugs":
+                session["flow_state"] = "mug_selection"
+                session["questions_asked"].append(MUGS_MESSAGE["response"])
+                print(f"Category 'Mugs' detected, moving to mug_selection")
+                end_time = time.time()
+                print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+                return MUGS_MESSAGE
+
+        # If no hardcoded category is detected, proceed with existing logic
         # Check for category match and intent
         message_lower = message_lower.strip()
         matched_category = None
@@ -1273,6 +1377,19 @@ async def chat(request: ChatRequest):
             best_match, score = process.extractOne(message_lower, categories, scorer=fuzz.partial_ratio)
             if score > 80:
                 matched_category = best_match
+
+        # Always check intent first, prioritizing greeting detection
+        if session["intent"] == "greeting":
+            session["category"] = None
+            session["context"] = "greeting"
+            session["suggested_categories"] = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs", "Gift Giving"]
+            session["stage"] = "follow_up"
+            session["flow_state"] = "awaiting_category"
+            session["questions_asked"].append(WELCOME_MESSAGE["response"])
+            print(f"Greeting detected, returning welcome message with buttons")
+            end_time = time.time()
+            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
+            return WELCOME_MESSAGE
 
         # If intent is product_request or category_change, prioritize category detection
         if session["intent"] in ["product_request", "category_change"]:
@@ -1288,8 +1405,8 @@ async def chat(request: ChatRequest):
                             "product name": product["Title"],
                             "description": strip_html(product.get("Product Description", "")),
                             "price": float(product.get("Variant Price", 0)),
-                            "Link to product": product.get("URL", "https://example.com"),
-                            "Image URL": product.get("Image Src", "https://example.com/default-image.jpg")
+                            "Link to product": product.get("URL"),
+                            "Image URL": product.get("Image Src")
                         }],
                         "metadata": {
                             "total_products": 1
@@ -1349,11 +1466,6 @@ async def chat(request: ChatRequest):
                     f"Create a clear, engaging, and concise question suitable for a UI, presenting the available tags as polished options without prefixes like 'type of:', 'style:', or 'category:'. "
                     f"For each option, include a brief, appealing description in parentheses to enhance user understanding (e.g., for Drinkware: 'Personalized (custom names or photos)', for Earrings: 'Danglers (vibrant, hanging designs)'). "
                     f"Ensure the question encourages the user to select a specific style or type, avoiding technical tag formats in the displayed text. "
-                    f"Example format for a generic category:\n"
-                    f"Which type of {session['category']} would you like to explore? 🎨✨\n"
-                    f"- Option 1 (description of style or type)\n"
-                    f"- Option 2 (description of style or type)\n"
-                    f"- Option 3 (description of style or type)\n"
                     f"Return a JSON object with two keys:\n"
                     f"- 'response': The follow-up question with formatted options as shown above.\n"
                     f"- 'options': The list of original tag names (e.g., 'type of earring:danglers', 'style:contemporary') for backend use."
@@ -1366,7 +1478,6 @@ async def chat(request: ChatRequest):
                 }
                 agent_response = call_lyzr_api(payload, headers) or {
                     "response": f"Which type of {session['category']} would you like to explore? 🎨✨\n" + "\n".join([f"- {tag.split(':')[-1].title()} (unique, handcrafted design)" for tag in tags[:4]]),
-                    # "options": tags[:4]
                 }
                 print(f"Agent response for subcategory question: {agent_response}")
 
@@ -1376,7 +1487,6 @@ async def chat(request: ChatRequest):
                 return {
                     "response": agent_response["response"],
                     "type": "text",
-                    # "options": agent_response["options"]
                 }
 
             # If no category is matched, use LLM to suggest categories
@@ -1435,11 +1545,6 @@ async def chat(request: ChatRequest):
                     f"Create a clear, engaging, and concise question suitable for a UI, presenting the available tags as polished options without prefixes like 'type of:', 'style:', or 'category:'. "
                     f"For each option, include a brief, appealing description in parentheses to enhance user understanding (e.g., for Drinkware: 'Personalized (custom names or photos)', for Earrings: 'Danglers (vibrant, hanging designs)'). "
                     f"Ensure the question encourages the user to select a specific style or type, avoiding technical tag formats in the displayed text. "
-                    f"Example format for a generic category:\n"
-                    f"Which type of {session['category']} would you like to explore? 🎨✨\n"
-                    f"- Option 1 (description of style or type)\n"
-                    f"- Option 2 (description of style or type)\n"
-                    f"- Option 3 (description of style or type)\n"
                     f"Return a JSON object with two keys:\n"
                     f"- 'response': The follow-up question with formatted options as shown above.\n"
                     f"- 'options': The list of original tag names (e.g., 'type of earring:danglers', 'style:contemporary') for backend use."
@@ -1452,7 +1557,6 @@ async def chat(request: ChatRequest):
                 }
                 agent_response = call_lyzr_api(payload, headers) or {
                     "response": f"Which type of {session['category']} would you like to explore? 🎨✨\n" + "\n".join([f"- {tag.split(':')[-1].title()} (unique, handcrafted design)" for tag in tags[:4]]),
-                    # "options": tags[:4]
                 }
                 print(f"Agent response for subcategory question: {agent_response}")
 
@@ -1462,7 +1566,6 @@ async def chat(request: ChatRequest):
                 return {
                     "response": agent_response["response"],
                     "type": "text",
-                    # "options": agent_response["options"]
                 }
 
             # If no specific category, return LLM-generated response
@@ -1472,27 +1575,11 @@ async def chat(request: ChatRequest):
                     f"{', '.join(suggested_categories)}? Please choose one or tell me more!"
                 ),
                 "type": "text",
-                # "options": suggested_categories
             }
             session["questions_asked"].append(response["response"])
             end_time = time.time()
             print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
             return response
-
-        # Fallback to greeting detection only if intent is explicitly greeting and no category is matched
-        greetings = ['hi', 'hey', 'heyy', 'heyyy', 'hello', 'hola']
-        if session["intent"] == "greeting" and any(message_lower.startswith(g) for g in greetings) and not specific_product and not matched_category:
-            session["category"] = None
-            session["context"] = "greeting"
-            session["suggested_categories"] = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs", "Gift Giving"]
-            session["stage"] = "follow_up"
-            session["flow_state"] = "awaiting_category"
-            session["questions_asked"].append(WELCOME_MESSAGE["response"])
-            print(f"Greeting detected, returning welcome message with buttons")
-
-            end_time = time.time()
-            print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
-            return WELCOME_MESSAGE
 
     elif session["flow_state"] == "awaiting_category":
         # Map user input to categories, including suggested categories from previous response
@@ -1506,8 +1593,6 @@ async def chat(request: ChatRequest):
             "terracotta mugs & cups": "Mugs",
             "4": "Order Tracking",
             "order tracking": "Order Tracking",
-            "5": "Others",
-            "others": "Others"
         }
         # Add suggested categories from session to category_map
         for idx, cat in enumerate(session.get("suggested_categories", []), 1):
@@ -2274,8 +2359,8 @@ async def chat(request: ChatRequest):
                             "product name": product["Title"],
                             "description": strip_html(product.get("Product Description", "")),
                             "price": float(product.get("Variant Price", 0)),
-                            "Link to product": product.get("URL", "https://example.com"),
-                            "Image URL": product.get("Image Src", "https://example.com/default-image.jpg")
+                            "Link to product": product.get("URL"),
+                            "Image URL": product.get("Image Src")
                         }],
                         "metadata": {
                             "total_products": 1
