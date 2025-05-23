@@ -1084,7 +1084,7 @@ def fetch_product_data(
                 params['tag_personalized'] = '%personalized%'
                 params['tag_wedding'] = '%wedding%'
                 params['tag_love'] = '%love%'
-                params['anniversary_categories'] = ['home decor', 'gift giving', 'decor']
+                params['anniversary_categories'] = ['home decor',  'decor']
                 print(f"Anniversary-based parameters: tag_personalized={params['tag_personalized']}, tag_wedding={params['tag_wedding']}, tag_love={params['tag_love']}, anniversary_categories={params['anniversary_categories']}")
 
             # Finalize query
@@ -1288,7 +1288,6 @@ async def chat(request: ChatRequest):
             f"'Are you looking for a romantic gift for your anniversary, like personalized decor or couple mugs?'.\n"
             f"- If the query mentions 'art and craft', prioritize 'Arts & Crafts' or 'Art & Craft Kits' and ask, "
             f"'Do you want to dive into creative art and craft kits or explore handcrafted art pieces?'.\n"
-            f"- If the query is vague (e.g., 'gift ideas'), suggest a broad range of categories like 'Gift Giving', 'Decor', 'Drinkware' and ask, "
             f"'I’d love to help you find the perfect gift! Are you thinking of something like home decor, personalized items, or maybe unique drinkware?'.\n"
             f"Avoid generic phrases like 'It looks like you're looking for something special' or 'I'm not sure exactly what you're looking for'. "
             f"Instead, craft a response that feels personalized and directly relates to the user's query or context. "
@@ -1382,7 +1381,7 @@ async def chat(request: ChatRequest):
         if session["intent"] == "greeting":
             session["category"] = None
             session["context"] = "greeting"
-            session["suggested_categories"] = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs", "Gift Giving"]
+            session["suggested_categories"] = ["Name Plates", "Dolls, Playsets & Toy Figures", "Mugs"]
             session["stage"] = "follow_up"
             session["flow_state"] = "awaiting_category"
             session["questions_asked"].append(WELCOME_MESSAGE["response"])
@@ -1391,6 +1390,7 @@ async def chat(request: ChatRequest):
             print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
             return WELCOME_MESSAGE
 
+        # If intent is product_request or category_change, prioritize category detection
         # If intent is product_request or category_change, prioritize category detection
         if session["intent"] in ["product_request", "category_change"]:
             is_vague, specific_item, context = is_query_vague(request.message, categories, session, headers)
@@ -1419,34 +1419,32 @@ async def chat(request: ChatRequest):
                     print(f"[{end_time}] Chat endpoint completed in {end_time - start_time:.3f} seconds")
                     return response
 
-            # If a category is matched or intent is category_change, proceed to subcategory_selection
-            if matched_category or session["intent"] == "category_change":
-                session["category"] = matched_category or session["category"]
-                if not session["category"]:
-                    print("No category identified, defaulting to Gift Giving")
-                    session["category"] = "Gift Giving"
+            # Try to detect category using LLM
+            matched_category = detect_category(request.message, headers)
+            if matched_category:
+                session["category"] = matched_category
                 session["flow_state"] = "subcategory_selection"
                 session["stage"] = "subcategory_selection"
-                print(f"Category {session['category']} detected, moving to subcategory_selection")
+                print(f"Category {matched_category} detected via LLM, moving to subcategory_selection")
 
-                tags = get_distinct_tags(session["category"])
+                tags = get_distinct_tags(matched_category)
                 session["subcategory_tags"] = tags
                 if not tags:
-                    print(f"No tags found for category {session['category']}, proceeding to recommendation")
+                    print(f"No tags found for category {matched_category}, proceeding to recommendation")
                     session["flow_state"] = "recommendation"
                     session["stage"] = "recommendation"
                     error_message, recommended_products, total_products = fetch_product_data(
                         category=session["category"],
                         price_sensitive=session["price_sensitive"],
                         recipient_context=session["recipient_context"],
-                        subcategory_tags=[f"category:{session['category'].lower()}"]
+                        subcategory_tags=[f"category:{matched_category.lower()}"]
                     )
                     session["last_product_info"] = error_message
                     session["recommended_products"] = recommended_products
                     session["questions_asked"].append("Recommendation provided")
 
                     response = {
-                        "response": f"Here are the top products in {session['category']}:\n{error_message or 'Products retrieved successfully.'}",
+                        "response": f"Here are the top products in {matched_category}:\n{error_message or 'Products retrieved successfully.'}",
                         "type": "interactive_prod",
                         "products": recommended_products,
                         "metadata": {
